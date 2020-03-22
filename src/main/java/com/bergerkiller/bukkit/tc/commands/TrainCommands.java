@@ -10,6 +10,7 @@ import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.common.utils.StringUtil;
 import com.bergerkiller.bukkit.tc.CollisionMode;
 import com.bergerkiller.bukkit.tc.Direction;
+import com.bergerkiller.bukkit.tc.LCTManual;
 import com.bergerkiller.bukkit.tc.Permission;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TrainCarts;
@@ -631,7 +632,14 @@ public class TrainCommands {
             } else {
                 p.sendMessage(ChatColor.RED + "Can not animate the train: it is not loaded");
             }
-        } else if (args.length >= 1 && Util.parseProperties(prop, cmd, String.join(" ", args))) {
+        } else if (LogicUtil.contains(cmd, "drive")) {
+    		LCTManual.commandDrive(prop.getHolder(), p, args);
+    		return true;
+        } else if (LogicUtil.contains(cmd, "unlink")) {
+    		Permission.DRIVE_ME.handle(p);
+    		prop.getHolder().lctManual.unlink(p);
+    		return true;
+    	} else if (args.length >= 1 && Util.parseProperties(prop, cmd, String.join(" ", args))) {
             p.sendMessage(ChatColor.GREEN + "Property has been updated!");
             return true;
         } else {

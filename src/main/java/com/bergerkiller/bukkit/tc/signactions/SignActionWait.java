@@ -92,6 +92,10 @@ public class SignActionWait extends SignAction {
 
             //distance
             if (info.getGroup().getSpeedAhead(distance) != Double.MAX_VALUE) {
+            	if (info.getGroup().isManualMovement) {
+            		info.getGroup().lctManual.setWaitTarget(distance);
+            		return;
+            	}
                 info.getGroup().getActions().clear();
                 info.getMember().getActions().addActionWaitOccupied(distance, delay, launchDistance, launchDirection, launchVelocity);
             }

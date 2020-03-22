@@ -20,6 +20,7 @@ import com.bergerkiller.bukkit.common.wrappers.LongHashSet;
 import com.bergerkiller.bukkit.common.wrappers.LongHashSet.LongIterator;
 import com.bergerkiller.bukkit.tc.exception.GroupUnloadedException;
 import com.bergerkiller.bukkit.tc.exception.MemberMissingException;
+import com.bergerkiller.bukkit.tc.LCTManual;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TCTimings;
 import com.bergerkiller.bukkit.tc.TrainCarts;
@@ -82,6 +83,8 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
     private int updateStepCount = 1;
     private int updateStepNr = 1;
     private boolean unloaded = false;
+    public boolean isManualMovement = false;
+    public LCTManual lctManual = new LCTManual(this, "");
 
     protected MinecartGroup() {
         this.ticked.set();
@@ -448,6 +451,7 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
     }
 
     public void remove() {
+    	this.lctManual.reset();
         Util.checkMainThread("MinecartGroup::remove()");
         if (!groups.remove(this)) {
             return; // Already removed
@@ -1495,6 +1499,10 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
             TrainCarts.plugin.log(Level.SEVERE, "Failed to perform physics on train '" + p.getTrainName() + "' at " + p.getLocation() + ":");
             TrainCarts.plugin.handle(t);
         }
+        if (isManualMovement) {
+			this.lctManual.doTick();
+		}
+		this.lctManual.doSound();
     }
 
     private boolean doPhysics_step() throws GroupUnloadedException {

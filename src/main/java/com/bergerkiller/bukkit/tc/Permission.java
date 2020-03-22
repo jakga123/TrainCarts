@@ -99,6 +99,12 @@ public class Permission extends PermissionEnum {
     public static final Permission BREAK_MINECART_ANY = new Permission("train.break.any", PermissionDefault.OP, "The player can break all carts in the game");
     public static final Permission GENERAL_PROPERTIES_ADMIN = new Permission("train.properties.admin", PermissionDefault.OP, "Carts placed by this player get the admin properties");
     public static final Permission TICKET_MANAGE = new Permission("train.ticket.manage", PermissionDefault.OP, "The player can edit the details of existing tickets or create new tickets");
+    public static final Permission DRIVE_ME = new Permission("train.drive.me", PermissionDefault.OP, "Drive Me");
+    public static final Permission DRIVE_120 = new Permission("train.drive.120", PermissionDefault.OP, "Drive Under 121 (Metro)");
+    public static final Permission DRIVE_200 = new Permission("train.drive.200", PermissionDefault.OP, "Drive Under 201 (Locomotive)");
+    public static final Permission DRIVE_NOLIMIT = new Permission("train.drive.unlimited", PermissionDefault.OP, "Drive Unlimit Speed (Yunghui)");
+    public static final Permission DRIVE_ALL = new Permission("train.drive.me", PermissionDefault.OP, "Drive All");
+    public static final Permission DRIVE_OFF = new Permission("train.drive.me", PermissionDefault.OP, "Drive Off");
 
     // Special hidden debug sekretz
     public static final Permission DEBUG_COMMAND_DEBUG = new Permission("train.debug", PermissionDefault.OP, "The player can use special commands useful for debugging the plugin");

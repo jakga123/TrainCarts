@@ -22,6 +22,9 @@ public class SignActionStation extends SignAction {
             return;
         }
         if (info.isAction(SignActionType.GROUP_LEAVE)) {
+        	if (info.getGroup().isManualMovement) {
+        		info.getGroup().lctManual.clearStation();
+        	}
             if (info.getGroup().getActions().isWaitAction()) {
                 info.getGroup().getActions().clear();
             }
@@ -37,7 +40,10 @@ public class SignActionStation extends SignAction {
         if (!station.isValid()) {
             return;
         }
-
+    	if (info.getGroup().isManualMovement && info.isAction(SignActionType.GROUP_ENTER)) {
+        	info.getGroup().lctManual.setTarget(info.getRailLocation());
+    		return;
+    	}
         //What do we do?
         if (station.getInstruction() == null) {
             // Clear actions, but only if requested to do so because of a redstone change

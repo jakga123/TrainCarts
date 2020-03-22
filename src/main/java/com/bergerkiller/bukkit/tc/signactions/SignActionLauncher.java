@@ -63,7 +63,14 @@ public class SignActionLauncher extends SignAction {
             if (addToRealSpeed) {
                 launchVelocity += info.getMember().getRealSpeed();
             }
-
+            if (info.getGroup().isManualMovement) {
+        		if (launchVelocity == TCConfig.launchForce) {
+            		info.getGroup().lctManual.clearTarget();
+        		} else {
+            		info.getGroup().lctManual.setTarget(launchVelocity);
+        		}
+        		return;
+            }
             // Launch
             info.getGroup().getActions().clear();
             info.getMember().getActions().addActionLaunch(direction, launchConfig, launchVelocity);

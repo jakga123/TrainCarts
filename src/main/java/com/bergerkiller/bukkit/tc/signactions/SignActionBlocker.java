@@ -21,6 +21,10 @@ public class SignActionBlocker extends SignAction {
     public void execute(SignActionEvent info) {
         if (info.getMode() != SignActionMode.NONE && info.hasRailedMember()) {
             if (info.isAction(SignActionType.GROUP_LEAVE) || info.isAction(SignActionType.REDSTONE_OFF)) {
+                if (info.getGroup().isManualMovement) {
+            		info.getGroup().lctManual.clearTarget();
+            		return;
+                }
                 // Remove the wait state when the train leaves or the sign lost power to block
                 GroupActionWaitState action = CommonUtil.tryCast(info.getGroup().getActions().getCurrentAction(), GroupActionWaitState.class);
                 if (action != null) {
@@ -30,6 +34,10 @@ public class SignActionBlocker extends SignAction {
                 // Set the next direction based on the sign
                 // Don't do this in the move event as that one fires too often (performance issue)
                 if (!info.isAction(SignActionType.MEMBER_MOVE)) {
+                    if (info.getGroup().isManualMovement) {
+                		info.getGroup().lctManual.setTarget(0);
+                		return;
+                    }
                     Direction direction = Direction.parse(info.getLine(3));
                     if (direction != Direction.NONE) {
                         long delay = ParseUtil.parseTime(info.getLine(2));
