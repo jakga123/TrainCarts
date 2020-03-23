@@ -256,6 +256,7 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
         this.chunkAreaValid = false;
         notifyPhysicsChange();
         member.setGroup(this);
+        member.settingRSL();
         this.getSignTracker().updatePosition();
         this.getProperties().add(member);
     }

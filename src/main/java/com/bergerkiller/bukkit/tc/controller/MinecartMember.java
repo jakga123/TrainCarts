@@ -160,7 +160,6 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         this.setUnloaded(true);
         this.railTrackerMember.onAttached();
         this.soundLoop = new SoundLoop<MinecartMember<?>>(this);
-    	this.settingRSL();
         this.updateDirection();
         this.wheelTracker.update();
         this.hasLinkedFarMinecarts = false;
