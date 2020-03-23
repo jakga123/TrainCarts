@@ -50,6 +50,7 @@ import com.bergerkiller.bukkit.common.utils.WorldUtil;
 import com.bergerkiller.bukkit.common.wrappers.DamageSource;
 import com.bergerkiller.bukkit.common.wrappers.MoveType;
 import com.bergerkiller.bukkit.tc.CollisionMode;
+import com.bergerkiller.bukkit.tc.RealisticSoundLoop;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TCListener;
 import com.bergerkiller.bukkit.tc.TCTimings;
@@ -129,6 +130,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     private Location postMovePosition = null;
     private Vector lastRailRefreshPosition = null;
     private Vector lastRailRefreshDirection = null;
+	public RealisticSoundLoop sound = null;
 
     public static boolean isTrackConnected(MinecartMember<?> m1, MinecartMember<?> m2) {
         // Can the minecart reach the other?
@@ -158,6 +160,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         this.setUnloaded(true);
         this.railTrackerMember.onAttached();
         this.soundLoop = new SoundLoop<MinecartMember<?>>(this);
+    	this.settingRSL();
         this.updateDirection();
         this.wheelTracker.update();
         this.hasLinkedFarMinecarts = false;
@@ -170,7 +173,20 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         setBlockCollisionBounds(new Vector(0.98, 0.7, 0.98));
     }
 
-    @Override
+    public void settingRSL() {
+    	if (this.getProperties().getDriveSound().toLowerCase().equals("train.line6")) {
+    		this.sound = new RealisticSoundLoop(this, false, "train.line6", 0f, 4.162f, 3.883f, 3.504f, 2.805f, 3.686f, 3.451f);
+    		//sound.add(new RealisticSoundLoop(member, "train.line6", 4.672f, 4.662f, 4.383f, 4.004f, 3.305f, 4.186f, 3.951f));
+    	} else if (this.getProperties().getDriveSound().toLowerCase().equals("train.teukdae")) {
+    		this.sound = new RealisticSoundLoop(this, true, "train.teukdae", 3f);
+    	} else if (this.getProperties().getDriveSound().toLowerCase().equals("train.emu")) {
+    		this.sound = new RealisticSoundLoop(this, true, "train.emu", 2.45f);
+    	} else {
+    		this.sound = new RealisticSoundLoop(this, false, this.getProperties().getDriveSound());
+    	}
+	}
+
+	@Override
     public void onDetached() {
         super.onDetached();
 
@@ -2017,7 +2033,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         this.checkMissing();
 
         // Play additional sound effects
-        this.soundLoop.onTick();
+        sound.onTick();
     }
 
     @Override

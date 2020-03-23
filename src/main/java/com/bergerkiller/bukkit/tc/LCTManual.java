@@ -32,7 +32,6 @@ public class LCTManual {
     private BossBar bossbar;
     private BossBar signalbar;
     private BossBar stationbar;
-    private List<RealisticSoundLoop> sound;
     private boolean targetStation;
     private double targetSpeed;
     private double targetDistance;
@@ -58,15 +57,6 @@ public class LCTManual {
 	    bossbar = Bukkit.createBossBar("", BarColor.BLUE, BarStyle.SEGMENTED_12);
 	    signalbar = Bukkit.createBossBar("차상 신호기", BarColor.YELLOW, BarStyle.SOLID);
 	   	stationbar = Bukkit.createBossBar("정차 위치", BarColor.BLUE, BarStyle.SEGMENTED_12);
-	    sound = new ArrayList<RealisticSoundLoop>();
-	    for (MinecartMember<?> member : group) {
-	    	if (member.getProperties().getDriveSound().toLowerCase().equals("train.line6")) {
-	    		sound.add(new RealisticSoundLoop(member, "train.line6", 0f, 4.662f, 4.383f, 4.004f, 3.305f, 4.186f, 3.951f));
-	    		//sound.add(new RealisticSoundLoop(member, "train.line6", 4.672f, 4.662f, 4.383f, 4.004f, 3.305f, 4.186f, 3.951f));
-	    	} else {
-	    		sound.add(new RealisticSoundLoop(member, "train.default"));
-	    	}
-	    }
 	}
 	/*put this on SignAction(Blocker, Launcher, Station, Wait)
     	if (info.getGroup().isManualMovement()) return;
@@ -133,7 +123,7 @@ public class LCTManual {
 			    			if (notch < 4) {
 			    				notch++;
 			    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-			    				if (notch > 0 && targetSpeed != 0 && targetDistance == 0 && targetSpeed > group.getAverageForce()) {
+			    				if (notch > 0) {
 			    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[역행" + notch + "]", 0, 70, 20);
 			    				} else if (notch < 0) {
 			    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[제동" + Math.abs(notch) + "]", 0, 70, 20);
@@ -423,6 +413,7 @@ public class LCTManual {
             g.getProperties().setWaitDistance(0);
             g.lctManual.reset();
     		g.lctManual = new LCTManual(g, p.getName());
+    		g.lctManual.stopped = true;
     	}
 	}
 	public void unlink(Player p) {
@@ -469,10 +460,8 @@ public class LCTManual {
 	}
 	public void setTarget(double double01) {
 		targetSpeed = double01;
-		if (targetSpeed == 0 && notch > 0) {
+		if (targetSpeed < group.getAverageForce() && notch > 0) {
 			notch = -8;
-		} else if (targetSpeed < group.getAverageForce() && notch > 0) {
-			notch = 0;
 		}
 	}
 	public void setWaitTarget(double double01) {
@@ -481,14 +470,9 @@ public class LCTManual {
 			notch = -8;
 		}
 	}
-	public void doSound() {
-		for (RealisticSoundLoop s : sound) {
-			s.onTick();
-		}
-	}
 	private void stopSound() {
-		for (RealisticSoundLoop s : sound) {
-			s.stop();
+		for (MinecartMember<?> m : group) {
+			m.sound.stop();
 		}
 	}
 }

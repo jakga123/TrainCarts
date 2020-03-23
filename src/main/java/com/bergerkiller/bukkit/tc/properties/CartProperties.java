@@ -6,6 +6,7 @@ import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.utils.LogicUtil;
 import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.tc.Permission;
+import com.bergerkiller.bukkit.tc.RealisticSoundLoop;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.Util;
@@ -746,5 +747,6 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
 
     public void setDriveSound(String driveSound) {
         this.driveSound = driveSound;
+        this.getHolder().settingRSL();
     }
 }

@@ -33,11 +33,11 @@ public class SignActionBlocker extends SignAction {
             } else if (info.isPowered() && info.isAction(SignActionType.GROUP_ENTER, SignActionType.REDSTONE_ON, SignActionType.MEMBER_MOVE)) {
                 // Set the next direction based on the sign
                 // Don't do this in the move event as that one fires too often (performance issue)
+                if (info.getGroup().isManualMovement) {
+            		info.getGroup().lctManual.setTarget(0);
+            		return;
+                }
                 if (!info.isAction(SignActionType.MEMBER_MOVE)) {
-                    if (info.getGroup().isManualMovement) {
-                		info.getGroup().lctManual.setTarget(0);
-                		return;
-                    }
                     Direction direction = Direction.parse(info.getLine(3));
                     if (direction != Direction.NONE) {
                         long delay = ParseUtil.parseTime(info.getLine(2));

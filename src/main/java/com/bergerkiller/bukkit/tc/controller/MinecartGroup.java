@@ -1502,7 +1502,6 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
         if (isManualMovement) {
 			this.lctManual.doTick();
 		}
-		this.lctManual.doSound();
     }
 
     private boolean doPhysics_step() throws GroupUnloadedException {
