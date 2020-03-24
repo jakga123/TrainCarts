@@ -25,7 +25,7 @@ public class RealisticSoundLoop {
         soundTarget = s;
         member = newMember;
         delay_a = 0;
-        delay_b = Math.round(((float)member.getIndex() / (float)member.getGroup().size()) * 40f);
+        delay_b = Math.round(((float)member.getIndex() / (float)member.getGroup().size()) * 50f);
         delay_c = 0;
         pitchChange = b;
     	float stacked = 0f;
@@ -41,13 +41,6 @@ public class RealisticSoundLoop {
     }
     public void play(String sound, float volume, float pitch) {
     	member.getEntity().getWorld().playSound(member.getEntity().getLocation(), sound, volume, pitch);
-		//p.sendMessage("outside sound, savedLevel:" + savedLevel + ", soundName:" + sound + ", volume:" + volume);
-    	for (Player p : member.getEntity().getWorld().getPlayers()) {
-    		if (member.getEntity().getPassengers().contains(p)) {
-        		p.playSound(member.getEntity().getLocation(), sound, volume * 10f, pitch);
-        		//p.sendMessage("inside sound, savedLevel:" + savedLevel + ", soundName:" + sound);
-    		}
-    	}
     }
     /*public void play(Sound sound, float volume, float pitch) {
         member.getEntity().getWorld().playSound(member.getEntity().getLocation(), sound, volume, pitch);
@@ -78,7 +71,7 @@ public class RealisticSoundLoop {
 			}
 			if (nodes.get(0) != null) {
 				if (nodes.get(0) * 10 < delay_a) {
-					play(soundTarget + ".motor0", pitch * 1.7f, pitch);
+					play(soundTarget + ".motor0", pitch * 2f, pitch);
 	    			delay_a = 0;
 				}
 			}
@@ -101,27 +94,27 @@ public class RealisticSoundLoop {
 			if (nodes.get(savedLevel) * 20 < delay_a && handler.notch > 0) {
     			if (nodes.size() - 1 > savedLevel) {
     				if (speed != 0) {
-    					play(soundTarget + ".motor" + savedLevel, 2f);
+    					play(soundTarget + ".motor" + savedLevel, 5f);
     				}
         			savedLevel++;
     			}
 			} else if (nodes.get(savedLevel) * 20 > delay_a && handler.notch < 0) {
 				if (speed != 0) {
-					play(soundTarget + ".motor" + savedLevel + "r", 2f);
+					play(soundTarget + ".motor" + savedLevel + "r", 5f);
 				}
     			if (savedLevel > 0) {
         			savedLevel--;
     			}
     		}
 		}
-	    if (delay_b > 40 && speed != 0) {
+	    if (delay_b > 50 && speed != 0) {
 	    	delay_b = 0;
-	    	play(soundTarget + ".base", (float)speed * 4f);
+	    	play(soundTarget + ".base", (float)speed * 5f, (float)speed);
     	}
 		delay_c++;
-	    if (delay_c > 40) {
+	    if (delay_c > 50) {
 	    	if (speed != 0) {
-		    	play(soundTarget + ".engine", (float)speed * 2f, (float)speed);
+		    	play(soundTarget + ".engine", (float)speed * 5f, (float)speed);
 		    	//System.out.println((float)speed);
 	    	} else {
 		    	play(soundTarget + ".idle", 1f);
