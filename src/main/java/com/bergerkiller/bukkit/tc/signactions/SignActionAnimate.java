@@ -19,6 +19,11 @@ public class SignActionAnimate extends SignAction {
     public void animate(SignActionEvent info) {
         AnimationOptions options = new AnimationOptions();
         options.loadFromSign(info);
+        if (info.getGroup().isManualMovement) {
+	    	if (options.getName().equals("ldopen") || options.getName().equals("rdopen") || options.getName().equals("ldclose") || options.getName().equals("rdclose")) {
+	    		return;
+	    	}
+        }
         for (MinecartMember<?> mm : info.getMembers()) {
             mm.playNamedAnimation(options);
         }
