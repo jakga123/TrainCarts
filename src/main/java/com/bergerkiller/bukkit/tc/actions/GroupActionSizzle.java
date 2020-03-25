@@ -9,6 +9,7 @@ public class GroupActionSizzle extends GroupAction {
             j = i * 3;
             if (j < this.getGroup().size()) {
                 this.getGroup().get(j).playLinkEffect(false);
+                this.getGroup().get(j).sound.stop();
             }
         }
     }
