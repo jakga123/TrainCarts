@@ -1,8 +1,10 @@
 package com.bergerkiller.bukkit.tc.signactions;
 
+import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.tc.Direction;
 import com.bergerkiller.bukkit.tc.Permission;
 import com.bergerkiller.bukkit.tc.Station;
+import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
@@ -24,6 +26,12 @@ public class SignActionStation extends SignAction {
         if (info.isAction(SignActionType.GROUP_LEAVE)) {
         	if (info.getGroup().isManualMovement) {
         		info.getGroup().lctManual.clearStation();
+                for (String part : info.getLine(3).split(" ")) {
+                    Direction direction = Direction.parse(part);
+                    if (direction == Direction.NONE) {
+                        info.getGroup().lctManual.setTarget(ParseUtil.parseDouble(part, TCConfig.launchForce));
+                    }
+                }
         	}
             if (info.getGroup().getActions().isWaitAction()) {
                 info.getGroup().getActions().clear();
