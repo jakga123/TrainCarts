@@ -20,7 +20,13 @@ public class SignActionAnimate extends SignAction {
         AnimationOptions options = new AnimationOptions();
         options.loadFromSign(info);
         if (info.getGroup().isManualMovement) {
-	    	if (options.getName().equals("ldopen") || options.getName().equals("rdopen") || options.getName().equals("ldclose") || options.getName().equals("rdclose")) {
+	    	if (options.getName().equals("ldopen")) {
+	    		info.getGroup().lctManual.leftDoorOpen();
+	    		return;
+	    	} else if (options.getName().equals("rdopen")) {
+	    		info.getGroup().lctManual.rightDoorOpen();
+	    		return;
+	    	} else if (options.getName().equals("ldclose") || options.getName().equals("rdclose")) {
 	    		return;
 	    	}
         }

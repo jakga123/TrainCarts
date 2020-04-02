@@ -60,7 +60,8 @@ public class RealisticSoundLoop {
     }
     public void onTick() {
         LCTManual handler = member.getGroup().lctManual;
-    	double speed = member.getRealSpeed();
+    	double speed = Math.min(member.getRealSpeed(), member.getGroup().getProperties().getSpeedLimit());
+    	float movedDist = (float)speed * 3.125f;
 		if (pitchChange) {
 			delay_a++;
 			float pitch = 1f;
@@ -94,32 +95,37 @@ public class RealisticSoundLoop {
 			if (nodes.get(savedLevel) * 20 < delay_a && handler.notch > 0) {
     			if (nodes.size() - 1 > savedLevel) {
     				if (speed != 0) {
-    					play(soundTarget + ".motor" + savedLevel, 5f);
+    					play(soundTarget + ".motor" + savedLevel, movedDist);
     				}
         			savedLevel++;
     			}
 			} else if (nodes.get(savedLevel) * 20 > delay_a && handler.notch < 0) {
 				if (speed != 0) {
-					play(soundTarget + ".motor" + savedLevel + "r", 5f);
+					play(soundTarget + ".motor" + savedLevel + "r", movedDist);
 				}
     			if (savedLevel > 0) {
         			savedLevel--;
     			}
     		}
 		}
-	    if (delay_b > 50 && speed != 0) {
-	    	delay_b = 0;
-	    	play(soundTarget + ".base", (float)speed * 5f, (float)speed);
+	    if (speed != 0) {
+	    	if (delay_b > 50 / speed) {
+		    	play(soundTarget + ".base", movedDist, (float)speed);
+		    	delay_b = 0;
+	    	}
     	}
 		delay_c++;
-	    if (delay_c > 50) {
-	    	if (speed != 0) {
-		    	play(soundTarget + ".engine", (float)speed * 5f, (float)speed);
-		    	//System.out.println((float)speed);
-	    	} else {
-		    	play(soundTarget + ".idle", 1f);
-	    	}
-	    	delay_c = 0;
+    	if (speed != 0) {
+    	    if (delay_c > 50 / speed) {
+    	    	play(soundTarget + ".engine", movedDist, (float)speed);
+    	    	delay_c = 0;
+    	    }
+	    	//System.out.println((float)speed);
+    	} else {
+    	    if (delay_c > 50) {
+    	    	play(soundTarget + ".idle", 1f);
+    	    	delay_c = 0;
+    	    }
     	}
     }
 }

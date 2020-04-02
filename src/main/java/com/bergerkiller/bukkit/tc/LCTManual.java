@@ -31,6 +31,8 @@ public class LCTManual {
     private boolean targetStation;
     private double targetSpeed;
     private double targetDistance;
+    private double tsLeftForce;
+    private double tsLeftDistance;
     private Location targetLoc;
 	public LCTManual(MinecartGroup newGroup, String playerName) {
 		group = newGroup;
@@ -47,7 +49,7 @@ public class LCTManual {
 	    ldoor = false;
 	    rdoor = false;
 	    targetStation = false;
-	    targetSpeed = 10d;
+	    targetSpeed = group.getProperties().getSpeedLimit();
 	    targetDistance = 0;
 	    targetLoc = new Location(group.getWorld(), 0, 0, 0);
 	    bossbar = Bukkit.createBossBar("", BarColor.BLUE, BarStyle.SEGMENTED_12);
@@ -128,7 +130,7 @@ public class LCTManual {
 			    					pilotPlayer.sendTitle("", ChatColor.GRAY + "[N]", 0, 70, 20);
 			    				}
 			    			}
-		    			} else if (degressC == 90 || degressC == -270) {//A
+		    			} else if (degressC == -90 || degressC == 270) {//A
 		    				if (ldoor) {
 		    					ldoor = false;
 				    			group.playNamedAnimation("ldclose");
@@ -148,23 +150,9 @@ public class LCTManual {
 			    		    		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
 			    		    	}
 		    				} else {
-		    					ldoor = true;
-		    					group.playNamedAnimation("ldopen");
-		    					group.getProperties().setPlayersEnter(true);
-		    					group.getProperties().setPlayersExit(true);
-			    		    	for (MinecartMember<?> member2 : group) {
-			    		    		for (Entity entity2 : member2.getEntity().getEntity().getPassengers()) {
-			    		    			if (entity2 == pilotPlayer) {
-			    		    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-					    					pilotPlayer.sendTitle("", ChatColor.GREEN + "[왼쪽 출입문 개방]", 0, 70, 20);
-			    		    			} else {
-			    		    				entity2.sendMessage(ChatColor.GREEN + "출입문이 열립니다.");
-			    		    			}
-			    		    		}
-			    		    		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
-			    		    	}
+		    					leftDoorOpen();
 		    				}
-		    			} else if (degressC == -90 || degressC == 270) {//D
+		    			} else if (degressC == 90 || degressC == -270) {//D
 		    				if (rdoor) {
 		    					rdoor = false;
 		    					group.playNamedAnimation("rdclose");
@@ -184,21 +172,7 @@ public class LCTManual {
 			    		    		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
 			    		    	}
 		    				} else {
-		    					rdoor = true;
-		    					group.playNamedAnimation("rdopen");
-		    					group.getProperties().setPlayersEnter(true);
-		    					group.getProperties().setPlayersExit(true);
-			    		    	for (MinecartMember<?> member2 : group) {
-			    		    		for (Entity entity2 : member2.getEntity().getEntity().getPassengers()) {
-			    		    			if (entity2 == pilotPlayer) {
-			    		    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-					    					pilotPlayer.sendTitle("", ChatColor.GREEN + "[오른쪽 출입문 개방]", 0, 70, 20);
-			    		    			} else {
-			    		    				entity2.sendMessage(ChatColor.GREEN + "출입문이 열립니다.");
-			    		    			}
-			    		    		}
-			    		    		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
-			    		    	}
+		    					rightDoorOpen();
 		    				}
 		    			} else if (degressC == 0) {//W
 		    				if (notch > -8) {
@@ -222,7 +196,20 @@ public class LCTManual {
 			}
 		}
 		//계산작업
-		if (notch > 0) {
+		if (targetSpeed < group.getAverageForce()) {
+			double brake = group.getAverageForce() - 0.005d;
+			if (brake <= 0) {
+				brake = 0;
+				if (!stopped) {
+			    	for (MinecartMember<?> member : group) {
+			    		group.getWorld().playSound(member.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
+			    	}
+			    	stopped = true;
+			    	stopSound();
+				}
+			}
+			group.setForwardForce(brake);
+		} else if (notch > 0) {
 			if (forwardFace == trueFace && group.getAverageForce() == 0 && stopped) {
 				group.setForwardForce(-0.02d);
 				group.updateDirection();
@@ -303,9 +290,9 @@ public class LCTManual {
 			if (group.getSpeedAhead(targetDistance) == Double.MAX_VALUE) {
 				targetDistance = 0;
 			}
-		} else if (targetSpeed == 10) {
+		} else if (targetSpeed >= group.getProperties().getSpeedLimit()) {
 			signalbar.setTitle("차상 신호기 || 제한 속도 : 없음");
-			signalbar.setColor(BarColor.YELLOW);
+			signalbar.setColor(BarColor.GREEN);
 		} else if (targetSpeed == 0) {
 			signalbar.setTitle("차상 신호기 || 제한 속도 : 0km/h");
 			signalbar.setColor(BarColor.RED);
@@ -337,6 +324,20 @@ public class LCTManual {
 				signalbar.removePlayer(p);
 				stationbar.removePlayer(p);
 			}
+		}
+		if (Math.abs(tsLeftForce) > 0) {
+			double mDist = Math.abs(group.getAverageForce());
+			double leftDist = tsLeftDistance - mDist;
+			if (leftDist <= 0) {
+				targetSpeed += tsLeftForce;
+				tsLeftForce = 0;
+			} else if (leftDist > 0) {
+				double leftRate = mDist / tsLeftDistance;
+				targetSpeed += tsLeftForce * leftRate;
+				tsLeftForce -= tsLeftForce * leftRate;
+			}
+			tsLeftDistance = leftDist;
+			//System.out.println(targetSpeed + ", " + tsLeftForce + ", " + tsLeftDistance);
 		}
 	}
 
@@ -390,7 +391,7 @@ public class LCTManual {
     		p.sendMessage(ChatColor.GREEN + "기관사님 환영합니다. 안전운전 되십시오.");
     		g.getActions().clear();
             g.setForwardForce(0);
-            g.getProperties().setSlowingDown(true);
+            g.getProperties().setSlowingDown(false);
             g.getProperties().setWaitDistance(0);
             g.lctManual.reset();
     		g.lctManual = new LCTManual(g, p.getName());
@@ -437,23 +438,75 @@ public class LCTManual {
 		targetStation = false;
 	}
 	public void clearTarget() {
-		targetSpeed = 10;
+		targetSpeed = group.getProperties().getSpeedLimit();
+		tsLeftForce = 0;
+		tsLeftDistance = 0;
 	}
 	public void setTarget(double double01) {
 		targetSpeed = double01;
-		if (targetSpeed < group.getAverageForce() && notch > 0) {
-			notch = -8;
-		}
+	}
+	public void setTarget(double dA, double dB) {
+		tsLeftForce = dA - targetSpeed;
+		tsLeftDistance = dB;
 	}
 	public void setWaitTarget(double double01) {
 		targetDistance = double01;
-		if (notch > 0) {
-			notch = -8;
-		}
 	}
 	private void stopSound() {
 		for (MinecartMember<?> m : group) {
 			m.sound.stop();
 		}
+	}
+	private Player getDriver() {
+		for (MinecartMember<?> member : group) {
+			if (member != group.head() && member != group.tail()) {
+				continue;
+			}
+			for (Entity entity : member.getEntity().getEntity().getPassengers()) {
+				if (entity.getName() == pilot) {
+					return (Player) entity;
+				} else {
+					continue;
+				}
+			}
+		}
+		return null;
+	}
+	public void leftDoorOpen() {
+		Player pilotPlayer = getDriver();
+		ldoor = true;
+		group.playNamedAnimation("ldopen");
+		group.getProperties().setPlayersEnter(true);
+		group.getProperties().setPlayersExit(true);
+    	for (MinecartMember<?> member2 : group) {
+    		for (Entity entity2 : member2.getEntity().getEntity().getPassengers()) {
+    			if (entity2 == pilotPlayer) {
+    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
+					pilotPlayer.sendTitle("", ChatColor.GREEN + "[왼쪽 출입문 개방]", 0, 70, 20);
+    			} else {
+    				entity2.sendMessage(ChatColor.GREEN + "출입문이 열립니다.");
+    			}
+    		}
+    		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
+    	}
+	}
+
+	public void rightDoorOpen() {
+		Player pilotPlayer = getDriver();
+		rdoor = true;
+		group.playNamedAnimation("rdopen");
+		group.getProperties().setPlayersEnter(true);
+		group.getProperties().setPlayersExit(true);
+    	for (MinecartMember<?> member2 : group) {
+    		for (Entity entity2 : member2.getEntity().getEntity().getPassengers()) {
+    			if (entity2 == pilotPlayer) {
+    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
+					pilotPlayer.sendTitle("", ChatColor.GREEN + "[오른쪽 출입문 개방]", 0, 70, 20);
+    			} else {
+    				entity2.sendMessage(ChatColor.GREEN + "출입문이 열립니다.");
+    			}
+    		}
+    		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
+    	}
 	}
 }
