@@ -78,7 +78,6 @@ public class TCConfig {
     public static boolean enableCeilingBlockCollision = true; // whether to allow blocks above the minecart to collide
     public static int collisionReEnterDelay = 100; // Delay before letting mobs/player enter again
     public static boolean optimizeBlockActivation;
-    public static boolean EssentialsEnabled = false;
     public static boolean SignLinkEnabled = false;
     public static boolean MinecartManiaEnabled = false;
     public static boolean activatorEjectEnabled = true;
@@ -108,8 +107,8 @@ public class TCConfig {
         config.setHeader("This is the configuration file of TrainCarts");
         config.addHeader("In here you can tweak TrainCarts to what you want");
         config.addHeader("For more information, you can visit the following websites:");
-        config.addHeader("http://www.minecraftwiki.net/wiki/Bukkit/TrainCarts");
-        config.addHeader("http://forums.bukkit.org/threads/traincarts.29491/");
+        config.addHeader("https://minecraft.gamepedia.com/Mods/TrainCarts");
+        config.addHeader("https://www.spigotmc.org/resources/traincarts.39592/");
 
         config.setHeader("resourcePack", "\nPath or online download URL to the resource pack to use");
         config.addHeader("resourcePack", "Using 'server' makes it use server.properties (default)");
@@ -366,6 +365,10 @@ public class TCConfig {
         config.setHeader("craftingRequireWorkbench", "\nWhether a crafting table must exist when crafting items inside a storage minecart\n" +
                 "When this is set to false and no crafting table is nearby, no item transfer animations are shown");
         craftingRequireWorkbench = config.get("craftingRequireWorkbench", true);
+
+        config.setHeader("triggerTimerDateFormat", "\nTime format used by trigger signs to display arrival times on signs");
+        config.addHeader("triggerTimerDateFormat", "Formatting: https://docs.oracle.com/javase/7/docs/api/java/text/SimpleDateFormat.html");
+        ArrivalSigns.setTimeDurationFormat(config.get("triggerTimerDateFormat", "HH:mm:ss"));
 
         //message shortcuts
         config.setHeader("messageShortcuts", "\nSeveral shortcuts you can use on announce signs (text is replaced)");

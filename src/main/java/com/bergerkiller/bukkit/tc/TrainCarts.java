@@ -40,6 +40,7 @@ import com.bergerkiller.bukkit.tc.storage.OfflineGroupManager;
 import com.bergerkiller.bukkit.tc.tickets.TicketStore;
 import com.bergerkiller.mountiplex.conversion.Conversion;
 
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
@@ -51,6 +52,7 @@ import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockEvent;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -74,6 +76,7 @@ public class TrainCarts extends PluginBase {
     private RedstoneTracker redstoneTracker;
     private GlowColorTeamProvider glowColorTeamProvider;
     private PathProvider pathProvider;
+    private Economy econ = null;
 
     /**
      * Gets a helper class for assigning (fake) entities to teams to change their glowing effect
@@ -131,6 +134,15 @@ public class TrainCarts extends PluginBase {
         return this.pathProvider;
     }
 
+    /**
+     * Gets the Economy manager
+     *
+     * @return
+     */
+    public Economy getEconomy() {
+        return econ;
+    }
+
     public static boolean canBreak(Material type) {
         return TCConfig.allowedBlockBreakTypes.contains(type);
     }
@@ -142,6 +154,10 @@ public class TrainCarts extends PluginBase {
      * @return currency text
      */
     public static String getCurrencyText(double value) {
+        Economy econ = TrainCarts.plugin.econ;
+        if (econ != null) {
+            return econ.format(value);
+        }
         return TCConfig.currencyFormat.replace("%value%", Double.toString(value));
     }
 
@@ -171,6 +187,23 @@ public class TrainCarts extends PluginBase {
             }
         }
         player.sendMessage(text);
+    }
+
+    /**
+     * Setup the Vault service
+     *
+     * @return boolean  whether Vault was registered successfully
+     */
+    private boolean setupEconomy() {
+        if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            return false;
+        }
+        RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
+        if (rsp == null) {
+            return false;
+        }
+        econ = rsp.getProvider();
+        return econ != null;
     }
 
     public static boolean isWorldDisabled(BlockEvent event) {
@@ -287,9 +320,6 @@ public class TrainCarts extends PluginBase {
                     signtask = null;
                 }
                 break;
-            case "Essentials":
-                TCConfig.EssentialsEnabled = enabled;
-                break;
             case "LightAPI":
                 log(Level.INFO, "LightAPI detected, the Light attachment is now available");
                 if (enabled)
@@ -348,6 +378,9 @@ public class TrainCarts extends PluginBase {
         //Load attachment models
         attachmentModels = new AttachmentModelStore(getDataFolder() + File.separator + "models.yml");
         attachmentModels.load();
+
+        //Setup Economy (Vault)
+        setupEconomy();
 
         //init statements
         Statement.init();
