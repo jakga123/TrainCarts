@@ -40,11 +40,11 @@ public class SignActionVariableText extends SignAction {
     @Override
     public boolean build(SignChangeActionEvent event) {
         if (event.isCartSign()) {
-            return handleBuild(event, Permission.BUILD_FLIPPER, "cart flipper", "flip the orientation of a Minecart");
+            return false;
         } else if (event.isTrainSign()) {
-            return handleBuild(event, Permission.BUILD_FLIPPER, "train cart flipper", "flip the orientation of all Minecarts in a train");
+            return handleBuild(event, Permission.BUILD_FLIPPER, "train setvtext", "make text attachments variable");
         } else if (event.isRCSign()) {
-            return handleBuild(event, Permission.BUILD_FLIPPER, "train cart flipper", "flip the orientation of all Minecarts in a train remotely");
+            return handleBuild(event, Permission.BUILD_FLIPPER, "train setvtext", "make text attachments variable remotely");
         }
         return false;
     }
