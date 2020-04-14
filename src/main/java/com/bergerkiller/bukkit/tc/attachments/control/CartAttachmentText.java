@@ -96,13 +96,13 @@ public class CartAttachmentText extends CartAttachment {
         this.entity.getMetaData().set(EntityHandle.DATA_FLAGS, (byte) EntityHandle.DATA_FLAG_INVISIBLE);
         this.entity.getMetaData().set(EntityHandle.DATA_NO_GRAVITY, true);
         this.entity.getMetaData().set(EntityHandle.DATA_CUSTOM_NAME_VISIBLE, true);
-        this.entity.getMetaData().set(EntityHandle.DATA_CUSTOM_NAME, ChatText.fromMessage(this.getController().getMember().getGroup().getVariableText(text)));
+        this.entity.getMetaData().set(EntityHandle.DATA_CUSTOM_NAME, ChatText.fromMessage(text));
         this.entity.setRelativeOffset(0, -1.6, 0);
     }
 
     @Override
     public void onTick() {
-    	if (!this.isAttached()) {
+    	if (!this.isAttached() || !this.isActive() || this.getController().getMember().isUnloaded()) {
     		return;
     	}
         String text = this.getConfig().get("text", " ");
