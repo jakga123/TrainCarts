@@ -25,6 +25,7 @@ public class LCTManual {
     public boolean stopped;
     private boolean ldoor;
     private boolean rdoor;
+    private boolean admin;
     private BossBar bossbar;
     private BossBar signalbar;
     private BossBar stationbar;
@@ -49,6 +50,7 @@ public class LCTManual {
 	    ldoor = false;
 	    rdoor = false;
 	    targetStation = false;
+	    admin = false;
 	    targetSpeed = group.getProperties().getSpeedLimit();
 	    targetDistance = 0;
 	    targetLoc = new Location(group.getWorld(), 0, 0, 0);
@@ -196,7 +198,7 @@ public class LCTManual {
 			}
 		}
 		//계산작업
-		if (targetSpeed < group.getAverageForce()) {
+		if (targetSpeed < group.getAverageForce() && !admin) {
 			double brake = group.getAverageForce() - 0.005d;
 			if (brake <= 0) {
 				brake = 0;
@@ -366,11 +368,8 @@ public class LCTManual {
 		if (g.getProperties().getSpeedLimit() <= 2 && g.getProperties().getSpeedLimit() > 1.2d) {
 			Permission.DRIVE_200.handle(p);
 		}
-		if (g.getProperties().getSpeedLimit() <= 1.2d && g.getProperties().getSpeedLimit() >= 1.0d) {
+		if (g.getProperties().getSpeedLimit() <= 1.2d) {
 			Permission.DRIVE_120.handle(p);
-		}
-		if (g.getProperties().getSpeedLimit() < 1.0d && g.getProperties().getSpeedLimit() > 0.4d) {
-			Permission.DRIVE_NOLIMIT.handle(p);
 		}
 		if (args.length > 0) {
             if (args[0].length() > 0) {
@@ -508,5 +507,13 @@ public class LCTManual {
     		}
     		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
     	}
+	}
+
+	public void setAdmin(boolean b) {
+		this.admin = b;
+	}
+
+	public boolean getAdmin() {
+		return admin;
 	}
 }
