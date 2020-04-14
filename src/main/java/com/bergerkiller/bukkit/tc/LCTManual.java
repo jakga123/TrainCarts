@@ -203,11 +203,11 @@ public class LCTManual {
 			if (brake <= 0) {
 				brake = 0;
 				if (!stopped) {
+			    	stopSound();
 			    	for (MinecartMember<?> member : group) {
 			    		group.getWorld().playSound(member.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
 			    	}
 			    	stopped = true;
-			    	stopSound();
 				}
 			}
 			group.setForwardForce(brake);
@@ -232,11 +232,11 @@ public class LCTManual {
 			if (brake <= 0) {
 				brake = 0;
 				if (!stopped) {
+			    	stopSound();
 			    	for (MinecartMember<?> member : group) {
 			    		group.getWorld().playSound(member.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
 			    	}
 			    	stopped = true;
-			    	stopSound();
 				}
 			}
 			group.setForwardForce(brake);
@@ -451,7 +451,7 @@ public class LCTManual {
 	public void setWaitTarget(double double01) {
 		targetDistance = double01;
 	}
-	private void stopSound() {
+	public void stopSound() {
 		for (MinecartMember<?> m : group) {
 			m.sound.stop();
 		}
