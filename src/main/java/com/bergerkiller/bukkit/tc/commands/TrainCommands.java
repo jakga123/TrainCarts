@@ -648,6 +648,19 @@ public class TrainCommands {
         		prop.getHolder().lctManual.setAdmin(true);
                 p.sendMessage(ChatColor.GOLD + "관리자 권한이 비활성화되었습니다.");
     		}
+    		return true;
+    	} else if (LogicUtil.contains(cmd, "setvtext")) {
+    		if (args.length >= 2) {
+    			if (prop.getHolder().containVariableText(args[0])) {
+                    p.sendMessage(ChatColor.GREEN + "유동적 텍스트 수정 완료!");
+    			} else {
+                    p.sendMessage(ChatColor.GREEN + "유동적 텍스트 추가 완료!");
+    			}
+    			prop.getHolder().setVariableText(args[0], args[1]);
+    		} else {
+                p.sendMessage(ChatColor.RED + "Usage: /train setvtext <key> <value>");
+    		}
+    		return true;
     	} else if (args.length >= 1 && Util.parseProperties(prop, cmd, String.join(" ", args))) {
             p.sendMessage(ChatColor.GREEN + "Property has been updated!");
             return true;

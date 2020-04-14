@@ -102,6 +102,9 @@ public class CartAttachmentText extends CartAttachment {
 
     @Override
     public void onTick() {
+    	if (!this.isAttached()) {
+    		return;
+    	}
         String text = this.getConfig().get("text", " ");
     	if (this.getController().getMember().getGroup().containVariableText(text)) {
             this.entity.getMetaData().set(EntityHandle.DATA_CUSTOM_NAME, ChatText.fromMessage(this.getController().getMember().getGroup().getVariableText(text)));
