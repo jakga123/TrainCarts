@@ -656,7 +656,7 @@ public class TrainCommands {
     			} else {
                     p.sendMessage(ChatColor.GREEN + "유동적 텍스트 추가 완료!");
     			}
-    			prop.getHolder().setVariableText(args[0], args[1]);
+    			prop.getHolder().setVariableText(args[0], StringUtil.getAfter(String.join(" ", args), " ").trim());
     		} else {
                 p.sendMessage(ChatColor.RED + "Usage: /train setvtext <key> <value>");
     		}
