@@ -60,6 +60,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
@@ -85,6 +86,7 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
     private boolean unloaded = false;
     public boolean isManualMovement = false;
     public LCTManual lctManual = new LCTManual(this, "");
+    private HashMap<String, String> variableTexts = new HashMap<String, String>();
 
     protected MinecartGroup() {
         this.ticked.set();
@@ -1686,4 +1688,17 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
             return false;
         }
     }
+
+	public String getVariableText(String text) {
+		if (variableTexts.containsKey(text)) {
+			return variableTexts.get(text);
+		}
+		return text;
+	}
+	public void setVariableText(String text, String text2) {
+		variableTexts.put(text, text2);
+	}
+	public boolean containVariableText(String text) {
+		return variableTexts.containsKey(text);
+	}
 }
