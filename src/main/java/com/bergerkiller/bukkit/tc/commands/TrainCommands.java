@@ -643,10 +643,10 @@ public class TrainCommands {
     		Permission.DRIVE_ADMIN.handle(p);
     		if (prop.getHolder().lctManual.getAdmin()) {
         		prop.getHolder().lctManual.setAdmin(false);
-                p.sendMessage(ChatColor.GREEN + "관리자 권한이 활성화되었습니다. 보안이 철저할 경우에만 사용해 주십시오.");
+                p.sendMessage(ChatColor.GOLD + "관리자 권한이 비활성화되었습니다.");
     		} else {
         		prop.getHolder().lctManual.setAdmin(true);
-                p.sendMessage(ChatColor.GOLD + "관리자 권한이 비활성화되었습니다.");
+                p.sendMessage(ChatColor.GREEN + "관리자 권한이 활성화되었습니다. 보안이 철저할 경우에만 사용해 주십시오.");
     		}
     		return true;
     	} else if (LogicUtil.contains(cmd, "setvtext")) {
