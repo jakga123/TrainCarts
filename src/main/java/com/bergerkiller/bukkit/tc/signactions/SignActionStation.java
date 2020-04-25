@@ -21,8 +21,6 @@ public class SignActionStation extends SignAction {
     @Override
     public void execute(SignActionEvent info) {
         if (info.isAction(SignActionType.MEMBER_LEAVE) && info.getGroup().isManualMovement) {
-    		info.getGroup().lctManual.clearStation();
-    		info.getGroup().lctManual.clearTarget();
             for (String part : info.getLine(3).split(" ")) {
                 Direction direction = Direction.parse(part);
                 if (direction == Direction.NONE) {
@@ -34,6 +32,10 @@ public class SignActionStation extends SignAction {
             return;
         }
         if (info.isAction(SignActionType.GROUP_LEAVE)) {
+        	if (info.getGroup().isManualMovement) {
+        		info.getGroup().lctManual.clearStation();
+        		info.getGroup().lctManual.clearTarget();
+        	}
             if (info.getGroup().getActions().isWaitAction()) {
                 info.getGroup().getActions().clear();
             }
