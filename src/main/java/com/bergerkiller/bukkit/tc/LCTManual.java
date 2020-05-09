@@ -224,48 +224,50 @@ public class LCTManual {
 			}
 		}
 		//계산작업
-		if (targetSpeed < group.getAverageForce() && !admin) {
-			double brake = group.getAverageForce() - 0.005d;
-			if (brake <= 0) {
-				brake = 0;
-				if (!stopped) {
-			    	stopSound();
-			    	for (MinecartMember<?> member : group) {
-			    		group.getWorld().playSound(member.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
-			    	}
-			    	stopped = true;
+		if (!isSemiAuto()) {
+			if (targetSpeed < group.getAverageForce() && !admin) {
+				double brake = group.getAverageForce() - 0.005d;
+				if (brake <= 0) {
+					brake = 0;
+					if (!stopped) {
+				    	stopSound();
+				    	for (MinecartMember<?> member : group) {
+				    		group.getWorld().playSound(member.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
+				    	}
+				    	stopped = true;
+					}
 				}
-			}
-			group.setForwardForce(brake);
-		} else if (notch > 0) {
-			if (forwardFace == trueFace && group.getAverageForce() == 0 && stopped) {
-				group.setForwardForce(-0.02d);
-				group.updateDirection();
-				if (pilotPlayer != null) {
-					pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-					pilotPlayer.sendTitle("", "[방향전환]", 0, 70, 20);
+				group.setForwardForce(brake);
+			} else if (notch > 0) {
+				if (forwardFace == trueFace && group.getAverageForce() == 0 && stopped) {
+					group.setForwardForce(-0.02d);
+					group.updateDirection();
+					if (pilotPlayer != null) {
+						pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
+						pilotPlayer.sendTitle("", "[방향전환]", 0, 70, 20);
+					}
+					stopped = false;
+				} else if ((double) (group.getProperties().getSpeedLimit() * (double) ((double)notch / 4.0d)) > group.getAverageForce()) {
+					group.setForwardForce(group.getAverageForce() + ((double)notch / 1000.0d * Math.sqrt(group.getProperties().getSpeedLimit())));
+					stopped = false;
 				}
-				stopped = false;
-			} else if ((double) (group.getProperties().getSpeedLimit() * (double) ((double)notch / 4.0d)) > group.getAverageForce()) {
-				group.setForwardForce(group.getAverageForce() + ((double)notch / 1000.0d * Math.sqrt(group.getProperties().getSpeedLimit())));
-				stopped = false;
-			}
-		} else if (notch < 0) {
-			double brake = group.getAverageForce() + ((double)notch / 2000.0d);
-			if (notch == -8) {
-				brake = group.getAverageForce() - 0.005d;
-			}
-			if (brake <= 0) {
-				brake = 0;
-				if (!stopped) {
-			    	stopSound();
-			    	for (MinecartMember<?> member : group) {
-			    		group.getWorld().playSound(member.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
-			    	}
-			    	stopped = true;
+			} else if (notch < 0) {
+				double brake = group.getAverageForce() + ((double)notch / 2000.0d);
+				if (notch == -8) {
+					brake = group.getAverageForce() - 0.005d;
 				}
+				if (brake <= 0) {
+					brake = 0;
+					if (!stopped) {
+				    	stopSound();
+				    	for (MinecartMember<?> member : group) {
+				    		group.getWorld().playSound(member.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
+				    	}
+				    	stopped = true;
+					}
+				}
+				group.setForwardForce(brake);
 			}
-			group.setForwardForce(brake);
 		}
 		if (group.getAverageForce() > 0.1) {
 			group.getProperties().playerCollision = CollisionMode.KILL;
