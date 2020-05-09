@@ -40,6 +40,7 @@ public class SignActionStation extends SignAction {
         	if (info.getGroup().isManualMovement) {
         		info.getGroup().lctManual.clearStation();
         		info.getGroup().lctManual.clearTarget();
+        		info.getGroup().lctManual.aDir = null;
         	}
             if (info.getGroup().getActions().isWaitAction()) {
                 info.getGroup().getActions().clear();
@@ -85,7 +86,7 @@ public class SignActionStation extends SignAction {
             //TODO: ADD CHECK?!
             group.getActions().launchReset();
             BlockFace trainDirection = station.getNextDirectionFace();
-            if (station.getNextDirection() != Direction.NONE) {
+            if (station.getNextDirection() != Direction.NONE && !info.getGroup().isManualMovement) {
                 // Actual launching here
                 if (station.hasDelay()) {
                     station.centerTrain();
@@ -101,9 +102,6 @@ public class SignActionStation extends SignAction {
             }
         } else {
             //Launch
-        	if (info.getGroup().isManualMovement) {
-        		return;
-        	}
             group.getActions().launchReset();
 
             if (station.hasDelay() || (group.head().isMoving() && !info.getMember().isDirectionTo(station.getInstruction()))) {

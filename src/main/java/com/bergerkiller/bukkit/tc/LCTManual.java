@@ -194,10 +194,10 @@ public class LCTManual {
 		    				}
 		    			} else if (degressC == 0) {//W
 		            		if (isSemiAuto()) {
-		            			if (group.getAverageForce() <= 0 && aDir != BlockFace.SELF) {
+		            			if (group.getAverageForce() <= 0 && aDir != null) {
 		            				getGroup().getActions().clear();
 									getGroup().head().getActions().addActionLaunch(aDir, aDist, aVelo);
-									aDir = BlockFace.SELF;
+									aDir = null;
 				                	aDist = 0;
 				                	aVelo = 0;
 		            			}
@@ -286,7 +286,7 @@ public class LCTManual {
 			doorString += ChatColor.GOLD + "Æó¼â]";
 		}
 		if (isSemiAuto()) {
-			if (group.getAverageForce() <= 0 && aDir != BlockFace.SELF) {
+			if (group.getAverageForce() <= 0 && aDir != null) {
 				notchString = ChatColor.AQUA + "[¹ÝÀÚµ¿]";
 			} else {
 				notchString = ChatColor.GRAY + "[¹ÝÀÚµ¿]";

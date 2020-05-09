@@ -92,17 +92,9 @@ public class SignActionWait extends SignAction {
 
             //distance
             if (info.getGroup().getSpeedAhead(distance) != Double.MAX_VALUE) {
-            	if (info.getGroup().isManualMovement) {
-            		if (info.getGroup().lctManual.isSemiAuto()) {
-                    	if (info.getGroup().lctManual.isSemiAuto()) {
-                    		info.getGroup().lctManual.aDir = launchDirection;
-                    		info.getGroup().lctManual.aDist = launchDistance;
-                    		info.getGroup().lctManual.aVelo = launchVelocity;
-                    	}
-            		} else {
-            			info.getGroup().lctManual.setWaitTarget(distance);
-            			return;
-            		}
+            	if (info.getGroup().isManualMovement && !info.getGroup().lctManual.isSemiAuto()) {
+	            	info.getGroup().lctManual.setWaitTarget(distance);
+	            	return;
             	}
                 info.getGroup().getActions().clear();
                 info.getMember().getActions().addActionWaitOccupied(distance, delay, launchDistance, launchDirection, launchVelocity);

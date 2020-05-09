@@ -40,14 +40,10 @@ public class SignActionBlocker extends SignAction {
                 }
                 BlockFace trainDirection2 = direction2.getDirection(info.getFacing(), info.getCartDirection());
                 if (info.getGroup().isManualMovement) {
-                	if (info.getGroup().lctManual.isSemiAuto()) {
-                		info.getGroup().lctManual.aDir = trainDirection2;
-                		info.getGroup().lctManual.aDist = 2.0;
-                		info.getGroup().lctManual.aVelo = info.getGroup().getAverageForce();
-                	} else {
+                	if (!info.getGroup().lctManual.isSemiAuto()) {
                 		info.getGroup().lctManual.setTarget(0);
-                		return;
                 	}
+                	return;
                 }
                 if (!info.isAction(SignActionType.MEMBER_MOVE)) {
                     Direction direction = Direction.parse(info.getLine(3));
