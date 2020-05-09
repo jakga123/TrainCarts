@@ -13,19 +13,28 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
+import com.bergerkiller.bukkit.tc.actions.Action;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
+import com.bergerkiller.bukkit.tc.controller.components.ActionTrackerGroup;
+import com.bergerkiller.bukkit.tc.utils.LauncherConfig;
 
 public class LCTManual {
     //Variable
 	private MinecartGroup group;
+	
 	public String pilot = "";
     public int notch;
-    private boolean pressed;
     public boolean stopped;
+    public BlockFace aDir;
+    public double aDist;
+    public double aVelo = 0;
+    
+    private boolean pressed;
     private boolean ldoor;
     private boolean rdoor;
     private boolean admin;
+    private boolean semiauto;
     private BossBar bossbar;
     private BossBar signalbar;
     private BossBar stationbar;
@@ -35,6 +44,7 @@ public class LCTManual {
     private double tsLeftForce;
     private double tsLeftDistance;
     private Location targetLoc;
+    
 	public LCTManual(MinecartGroup newGroup, String playerName) {
 		group = newGroup;
 		group.getProperties().setSoundEnabled(false);
@@ -51,9 +61,13 @@ public class LCTManual {
 	    rdoor = false;
 	    targetStation = false;
 	    admin = false;
+	    semiauto = false;
 	    targetSpeed = group.getProperties().getSpeedLimit();
 	    targetDistance = 0;
 	    targetLoc = new Location(group.getWorld(), 0, 0, 0);
+	    aDir = BlockFace.SELF;
+	    aDist = 0;
+	    aVelo = 0;
 	    bossbar = Bukkit.createBossBar("", BarColor.BLUE, BarStyle.SEGMENTED_12);
 	    signalbar = Bukkit.createBossBar("차상 신호기", BarColor.YELLOW, BarStyle.SOLID);
 	   	stationbar = Bukkit.createBossBar("정차 위치", BarColor.BLUE, BarStyle.SEGMENTED_12);
@@ -120,18 +134,20 @@ public class LCTManual {
 					if (!pressed) {
 		    			//Key Event
 		    			if (Math.abs(degressC) == 180) {//S
-			    			if (notch < 4) {
-			    				notch++;
-			    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-			    				if (notch > 0) {
-			    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[역행" + notch + "]", 0, 70, 20);
-			    				} else if (notch < 0) {
-			    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[제동" + Math.abs(notch) + "]", 0, 70, 20);
-			    				} else {
-				    				notch = 0;
-			    					pilotPlayer.sendTitle("", ChatColor.GRAY + "[N]", 0, 70, 20);
-			    				}
-			    			}
+		            		if (!isSemiAuto()) {
+				    			if (notch < 4) {
+				    				notch++;
+				    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
+				    				if (notch > 0) {
+				    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[역행" + notch + "]", 0, 70, 20);
+				    				} else if (notch < 0) {
+				    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[제동" + Math.abs(notch) + "]", 0, 70, 20);
+				    				} else {
+					    				notch = 0;
+				    					pilotPlayer.sendTitle("", ChatColor.GRAY + "[N]", 0, 70, 20);
+				    				}
+				    			}
+		            		}
 		    			} else if (degressC == -90 || degressC == 270) {//A
 		    				if (ldoor) {
 		    					ldoor = false;
@@ -177,17 +193,27 @@ public class LCTManual {
 		    					rightDoorOpen();
 		    				}
 		    			} else if (degressC == 0) {//W
-		    				if (notch > -8) {
-		    					notch--;
-		    					pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-		    					if (notch > 0) {
-			    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[역행" + notch + "]", 0, 70, 20);
-			    				} else if (notch < 0) {
-			    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[제동" + Math.abs(notch) + "]", 0, 70, 20);
-			    				} else {
-			    					pilotPlayer.sendTitle("", ChatColor.GRAY + "[N]", 0, 70, 20);
-		    					}
-		    				}
+		            		if (isSemiAuto()) {
+		            			if (group.getAverageForce() <= 0 && aDir != BlockFace.SELF) {
+		            				getGroup().getActions().clear();
+									getGroup().head().getActions().addActionLaunch(aDir, aDist, aVelo);
+									aDir = BlockFace.SELF;
+				                	aDist = 0;
+				                	aVelo = 0;
+		            			}
+		            		} else {
+			    				if (notch > -8) {
+			    					notch--;
+			    					pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
+			    					if (notch > 0) {
+				    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[역행" + notch + "]", 0, 70, 20);
+				    				} else if (notch < 0) {
+				    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[제동" + Math.abs(notch) + "]", 0, 70, 20);
+				    				} else {
+				    					pilotPlayer.sendTitle("", ChatColor.GRAY + "[N]", 0, 70, 20);
+			    					}
+			    				}
+		            		}
 		    			}
 					}
 					pressed = true;
@@ -259,7 +285,9 @@ public class LCTManual {
 		} else {
 			doorString += ChatColor.GOLD + "폐쇄]";
 		}
-		if (notch > 0) {
+		if (isSemiAuto()) {
+			notchString = ChatColor.AQUA + "[반자동]";
+		} else if (notch > 0) {
 			notchString = ChatColor.DARK_AQUA + "[역행" + notch + "]";
 		} else if (notch < 0) {
 			notchString = ChatColor.GOLD + "[제동" + Math.abs(notch) + "]";
@@ -389,7 +417,6 @@ public class LCTManual {
     	if (p instanceof Player) {
     		p.sendMessage(ChatColor.GREEN + "기관사님 환영합니다. 안전운전 되십시오.");
     		g.getActions().clear();
-            g.setForwardForce(0);
             g.getProperties().setSlowingDown(false);
             g.getProperties().setWaitDistance(0);
             g.lctManual.reset();
@@ -515,5 +542,9 @@ public class LCTManual {
 
 	public boolean getAdmin() {
 		return admin;
+	}
+
+	public boolean isSemiAuto() {
+		return semiauto;
 	}
 }

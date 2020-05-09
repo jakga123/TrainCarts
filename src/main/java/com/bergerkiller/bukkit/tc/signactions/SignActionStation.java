@@ -5,6 +5,8 @@ import com.bergerkiller.bukkit.tc.Direction;
 import com.bergerkiller.bukkit.tc.Permission;
 import com.bergerkiller.bukkit.tc.Station;
 import com.bergerkiller.bukkit.tc.TCConfig;
+import com.bergerkiller.bukkit.tc.Util;
+import com.bergerkiller.bukkit.tc.actions.MemberActionLaunch;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
@@ -20,13 +22,16 @@ public class SignActionStation extends SignAction {
 
     @Override
     public void execute(SignActionEvent info) {
+    	String pp = "";
         if (info.isAction(SignActionType.MEMBER_LEAVE) && info.getGroup().isManualMovement) {
             for (String part : info.getLine(3).split(" ")) {
                 Direction direction = Direction.parse(part);
                 if (direction == Direction.NONE) {
-                    info.getGroup().lctManual.setTarget(ParseUtil.parseDouble(part, TCConfig.launchForce));
+                	pp = part;
+                	break;
                 }
             }
+            info.getGroup().lctManual.setTarget(ParseUtil.parseDouble(pp, TCConfig.launchForce));
         }
         if (!info.isAction(SignActionType.REDSTONE_CHANGE, SignActionType.GROUP_ENTER, SignActionType.GROUP_LEAVE)) {
             return;
@@ -52,8 +57,14 @@ public class SignActionStation extends SignAction {
             return;
         }
     	if (info.getGroup().isManualMovement && info.isAction(SignActionType.GROUP_ENTER)) {
-        	info.getGroup().lctManual.setTarget(info.getRailLocation());
-    		return;
+        	if (info.getGroup().lctManual.isSemiAuto()) {
+        		info.getGroup().lctManual.aDir = station.getInstruction();
+        		info.getGroup().lctManual.aDist = station.getLaunchConfig().getDistance();
+        		info.getGroup().lctManual.aVelo = ParseUtil.parseDouble(pp, TCConfig.launchForce);
+        	} else {
+            	info.getGroup().lctManual.setTarget(info.getRailLocation());
+        		return;
+        	}
     	}
         //What do we do?
         if (station.getInstruction() == null) {
@@ -90,6 +101,9 @@ public class SignActionStation extends SignAction {
             }
         } else {
             //Launch
+        	if (info.getGroup().isManualMovement) {
+        		return;
+        	}
             group.getActions().launchReset();
 
             if (station.hasDelay() || (group.head().isMoving() && !info.getMember().isDirectionTo(station.getInstruction()))) {

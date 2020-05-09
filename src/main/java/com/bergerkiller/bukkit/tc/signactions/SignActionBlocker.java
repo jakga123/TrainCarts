@@ -4,6 +4,7 @@ import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.tc.Direction;
 import com.bergerkiller.bukkit.tc.Permission;
+import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.actions.GroupActionWaitState;
 import com.bergerkiller.bukkit.tc.controller.components.RailState;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
@@ -21,9 +22,9 @@ public class SignActionBlocker extends SignAction {
     public void execute(SignActionEvent info) {
         if (info.getMode() != SignActionMode.NONE && info.hasRailedMember()) {
             if (info.isAction(SignActionType.GROUP_LEAVE) || info.isAction(SignActionType.REDSTONE_OFF)) {
-                if (info.getGroup().isManualMovement) {
+                if (info.getGroup().isManualMovement && !info.getGroup().lctManual.isSemiAuto()) {
             		info.getGroup().lctManual.clearTarget();
-            		return;
+                	return;
                 }
                 // Remove the wait state when the train leaves or the sign lost power to block
                 GroupActionWaitState action = CommonUtil.tryCast(info.getGroup().getActions().getCurrentAction(), GroupActionWaitState.class);
@@ -33,9 +34,20 @@ public class SignActionBlocker extends SignAction {
             } else if (info.isPowered() && info.isAction(SignActionType.GROUP_ENTER, SignActionType.REDSTONE_ON, SignActionType.MEMBER_MOVE)) {
                 // Set the next direction based on the sign
                 // Don't do this in the move event as that one fires too often (performance issue)
+                Direction direction2 = Direction.parse(info.getLine(3));
+                if (direction2 == Direction.NONE) {
+                	direction2 = Direction.FORWARD;
+                }
+                BlockFace trainDirection2 = direction2.getDirection(info.getFacing(), info.getCartDirection());
                 if (info.getGroup().isManualMovement) {
-            		info.getGroup().lctManual.setTarget(0);
-            		return;
+                	if (info.getGroup().lctManual.isSemiAuto()) {
+                		info.getGroup().lctManual.aDir = trainDirection2;
+                		info.getGroup().lctManual.aDist = 2.0;
+                		info.getGroup().lctManual.aVelo = info.getGroup().getAverageForce();
+                	} else {
+                		info.getGroup().lctManual.setTarget(0);
+                		return;
+                	}
                 }
                 if (!info.isAction(SignActionType.MEMBER_MOVE)) {
                     Direction direction = Direction.parse(info.getLine(3));

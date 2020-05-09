@@ -64,17 +64,19 @@ public class SignActionLauncher extends SignAction {
                 launchVelocity += info.getMember().getRealSpeed();
             }
             if (info.getGroup().isManualMovement) {
-        		if (launchVelocity == TCConfig.launchForce) {
-            		info.getGroup().lctManual.clearTarget();
-        			//System.out.println("LCTM Action : clearTarget");
-        		} else if (launchConfig.hasDistance() || launchConfig.hasDuration()) {
-            		info.getGroup().lctManual.setTarget(launchVelocity, launchConfig.getDistance());
-        			//System.out.println("LCTM Action : setTarget 2");
-        		} else {
-            		info.getGroup().lctManual.setTarget(launchVelocity);
-        			//System.out.println("LCTM Action : setTarget 1");
+        		if (!info.getGroup().lctManual.isSemiAuto()) {
+            		if (launchVelocity == TCConfig.launchForce) {
+                		info.getGroup().lctManual.clearTarget();
+            			//System.out.println("LCTM Action : clearTarget");
+            		} else if (launchConfig.hasDistance() || launchConfig.hasDuration()) {
+                		info.getGroup().lctManual.setTarget(launchVelocity, launchConfig.getDistance());
+            			//System.out.println("LCTM Action : setTarget 2");
+            		} else {
+                		info.getGroup().lctManual.setTarget(launchVelocity);
+            			//System.out.println("LCTM Action : setTarget 1");
+            		}
+            		return;
         		}
-        		return;
             }
             // Launch
             info.getGroup().getActions().clear();
