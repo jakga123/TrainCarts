@@ -58,7 +58,7 @@ public class SignActionStation extends SignAction {
         }
     	if (info.getGroup().isManualMovement && info.isAction(SignActionType.GROUP_ENTER)) {
         	if (info.getGroup().lctManual.isSemiAuto()) {
-        		info.getGroup().lctManual.aDir = station.getInstruction();
+        		info.getGroup().lctManual.aDir = station.getNextDirectionFace();
         		info.getGroup().lctManual.aDist = station.getLaunchConfig().getDistance();
         		info.getGroup().lctManual.aVelo = ParseUtil.parseDouble(pp, TCConfig.launchForce);
         	} else {
