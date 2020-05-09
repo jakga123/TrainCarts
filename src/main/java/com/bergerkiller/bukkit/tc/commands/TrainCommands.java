@@ -641,12 +641,23 @@ public class TrainCommands {
     		return true;
         } else if (LogicUtil.contains(cmd, "admin")) {
     		Permission.DRIVE_ADMIN.handle(p);
-    		if (prop.getHolder().lctManual.getAdmin()) {
+    		if (prop.getHolder().lctManual.isAdmin()) {
         		prop.getHolder().lctManual.setAdmin(false);
                 p.sendMessage(ChatColor.GOLD + "관리자 권한이 비활성화되었습니다.");
     		} else {
         		prop.getHolder().lctManual.setAdmin(true);
                 p.sendMessage(ChatColor.GREEN + "관리자 권한이 활성화되었습니다. 보안이 철저할 경우에만 사용해 주십시오.");
+    		}
+    		return true;
+    	} else if (LogicUtil.contains(cmd, "semiauto")) {
+    		Permission.DRIVE_ADMIN.handle(p);
+    		if (prop.getHolder().lctManual.isSemiAuto()) {
+        		prop.getHolder().lctManual.setSemiAuto(false);
+                p.sendMessage(ChatColor.GOLD + "반자동 운전이 비활성화되었습니다.");
+    		} else {
+        		prop.getHolder().lctManual.setSemiAuto(true);
+                p.sendMessage(ChatColor.GREEN + "반자동 운전이 활성화되었습니다. 상단의 [반자동]표시가 파란색이 되면 발차를 결정할 수 있습니다.");
+                p.sendMessage(ChatColor.GREEN + "발차가 가능할때 [W]를 눌러 발차 하십시오.");
     		}
     		return true;
     	} else if (LogicUtil.contains(cmd, "setvtext")) {

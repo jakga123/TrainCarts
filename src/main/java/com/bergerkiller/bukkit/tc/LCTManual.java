@@ -286,7 +286,11 @@ public class LCTManual {
 			doorString += ChatColor.GOLD + "폐쇄]";
 		}
 		if (isSemiAuto()) {
-			notchString = ChatColor.AQUA + "[반자동]";
+			if (group.getAverageForce() <= 0 && aDir != BlockFace.SELF) {
+				notchString = ChatColor.AQUA + "[반자동]";
+			} else {
+				notchString = ChatColor.GRAY + "[반자동]";
+			}
 		} else if (notch > 0) {
 			notchString = ChatColor.DARK_AQUA + "[역행" + notch + "]";
 		} else if (notch < 0) {
@@ -540,11 +544,15 @@ public class LCTManual {
 		this.admin = b;
 	}
 
-	public boolean getAdmin() {
+	public boolean isAdmin() {
 		return admin;
 	}
 
 	public boolean isSemiAuto() {
 		return semiauto;
+	}
+
+	public void setSemiAuto(boolean b) {
+		this.semiauto = b;
 	}
 }
