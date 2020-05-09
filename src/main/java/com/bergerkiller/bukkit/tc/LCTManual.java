@@ -65,7 +65,7 @@ public class LCTManual {
 	    targetSpeed = group.getProperties().getSpeedLimit();
 	    targetDistance = 0;
 	    targetLoc = new Location(group.getWorld(), 0, 0, 0);
-	    aDir = BlockFace.SELF;
+	    aDir = null;
 	    aDist = 0;
 	    aVelo = 0;
 	    bossbar = Bukkit.createBossBar("", BarColor.BLUE, BarStyle.SEGMENTED_12);
@@ -425,6 +425,7 @@ public class LCTManual {
     		g.getActions().clear();
             g.getProperties().setSlowingDown(false);
             g.getProperties().setWaitDistance(0);
+            g.setForwardForce(0);
             g.lctManual.reset();
     		g.lctManual = new LCTManual(g, p.getName());
     		g.lctManual.stopped = true;
