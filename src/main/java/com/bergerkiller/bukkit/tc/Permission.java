@@ -103,8 +103,8 @@ public class Permission extends PermissionEnum {
     public static final Permission DRIVE_120 = new Permission("train.drive.120", PermissionDefault.OP, "Drive Under 121 (Metro)");
     public static final Permission DRIVE_200 = new Permission("train.drive.200", PermissionDefault.OP, "Drive Under 201 (Locomotive)");
     public static final Permission DRIVE_NOLIMIT = new Permission("train.drive.unlimited", PermissionDefault.OP, "Drive Unlimit Speed (Yunghui)");
-    public static final Permission DRIVE_ALL = new Permission("train.drive.me", PermissionDefault.OP, "Drive All");
-    public static final Permission DRIVE_OFF = new Permission("train.drive.me", PermissionDefault.OP, "Drive Off");
+    public static final Permission DRIVE_ALL = new Permission("train.drive.all", PermissionDefault.OP, "Drive All");
+    public static final Permission DRIVE_OFF = new Permission("train.drive.off", PermissionDefault.OP, "Drive Off");
     public static final Permission DRIVE_ADMIN = new Permission("train.drive.admin", PermissionDefault.OP, "Drive Admin");
 
     // Special hidden debug sekretz

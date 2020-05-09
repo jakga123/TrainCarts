@@ -650,7 +650,7 @@ public class TrainCommands {
     		}
     		return true;
     	} else if (LogicUtil.contains(cmd, "semiauto")) {
-    		Permission.DRIVE_ADMIN.handle(p);
+    		Permission.DRIVE_ME.handle(p);
     		if (prop.getHolder().lctManual.isSemiAuto()) {
         		prop.getHolder().lctManual.setSemiAuto(false);
                 p.sendMessage(ChatColor.GOLD + "반자동 운전이 비활성화되었습니다.");
