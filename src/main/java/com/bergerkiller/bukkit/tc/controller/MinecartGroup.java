@@ -386,7 +386,9 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
             this.remove();
         } else {
             //Split the train at the index
-            removed.playLinkEffect();
+            if (TCConfig.playHissWhenCartRemoved) {
+                removed.playLinkEffect();
+            }
             this.split(index);
         }
         return removed;
@@ -406,6 +408,7 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
         if (at >= this.size()) return null;
         //transfer the new removed carts
         MinecartGroup gnew = new MinecartGroup();
+        gnew.setProperties(TrainPropertiesStore.createSplitFrom(this.getProperties()));
         int count = this.size();
         for (int i = at; i < count; i++) {
             gnew.add(this.removeMember(this.size() - 1));
@@ -418,10 +421,6 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
         if (gnew.isValid()) {
             //Add the group
             groups.add(gnew);
-
-            //Set the new group properties
-            gnew.getProperties().load(this.getProperties());
-
             GroupCreateEvent.call(gnew);
 
             //Initialize rails and signs
@@ -1275,7 +1274,7 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
             // Check for mutex zones the next block. If one is found that is occupied, stop right away
             if (iter.movedTotal <= mutexDistance) {
                 MutexZone zone = MutexZoneCache.find(worldUUID, new IntVector3(iter.state.railBlock()));
-                if (zone != null && !zone.tryEnter(this)) {
+                if (zone != null && !zone.slot.tryEnter(this)) {
                     return 0.0;
                 }
 
@@ -1655,9 +1654,10 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
                 }
             }
 
-            // Perform the move and post-movement logic
+            // Perform the rail pre-movement and post-movement logic
             for (MinecartMember<?> member : this) {
                 try (Timings t = TCTimings.MEMBER_PHYSICS_POST.start()) {
+                    member.getRailType().onPreMove(member);
                     member.onPhysicsPostMove();
                     member.calcPostMovePosition();
                     if (this.breakPhysics) return true;

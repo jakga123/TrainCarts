@@ -14,6 +14,7 @@ import com.bergerkiller.bukkit.tc.controller.spawnable.SpawnableMember;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
 import com.bergerkiller.bukkit.tc.events.SignChangeActionEvent;
 import com.bergerkiller.bukkit.tc.signactions.spawner.SpawnSign;
+import com.bergerkiller.bukkit.tc.utils.SignBuildOptions;
 import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
 
 import org.bukkit.ChatColor;
@@ -49,7 +50,13 @@ public class SignActionSpawn extends SignAction {
 
     @Override
     public boolean build(SignChangeActionEvent event) {
-        if (!handleBuild(event, Permission.BUILD_SPAWNER, "train spawner", "spawn trains on the tracks above when powered by redstone")) {
+        if (!SignBuildOptions.create()
+                .setPermission(Permission.BUILD_SPAWNER)
+                .setName("train spawner")
+                .setDescription("spawn trains on the tracks above when powered by redstone")
+                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs/Spawner")
+                .handle(event.getPlayer()))
+        {
             return false;
         }
 
@@ -143,7 +150,7 @@ public class SignActionSpawn extends SignAction {
             if (launchDirection == BlockFace.SELF) {
                 if (modes.size() >= 2) {
                     // Centering is possible; more than one direction can be spawned
-                    if (FaceUtil.isVertical(info.getRailDirection())) {
+                    if (info.isRailsVertical()) {
                         if (centerMode == CenterMode.LEFT) {
                             launchDirection = BlockFace.DOWN;
                         } else if (centerMode == CenterMode.RIGHT) {
@@ -211,7 +218,7 @@ public class SignActionSpawn extends SignAction {
                 // Spawn direction from center mode. Default to the launch direction.
                 SpawnPositions selectedMode = modes.get(0);
                 BlockFace spawnDirection = launchDirection;
-                if (FaceUtil.isVertical(info.getRailDirection())) {
+                if (info.isRailsVertical()) {
                     // Up/down of the sign
                     if (centerMode == CenterMode.LEFT) {
                         spawnDirection = BlockFace.DOWN;

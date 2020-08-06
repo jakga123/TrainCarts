@@ -10,6 +10,7 @@ import com.bergerkiller.bukkit.tc.cache.RailSignCache;
 import com.bergerkiller.bukkit.tc.controller.components.RailState;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
 import com.bergerkiller.bukkit.tc.events.SignChangeActionEvent;
+import com.bergerkiller.bukkit.tc.utils.SignBuildOptions;
 import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
 
 public class SignActionWait extends SignAction {
@@ -31,7 +32,7 @@ public class SignActionWait extends SignAction {
 
             if (launchData.length == 3) {
                 launchDistance = ParseUtil.parseDouble(launchData[0], 2.0);
-                launchDirection = Direction.parse(launchData[1]).getDirection(info.getFacing(), info.getCartDirection());
+                launchDirection = Direction.parse(launchData[1]).getDirection(info.getFacing(), info.getCartEnterFace());
                 launchVelocity = ParseUtil.parseDouble(launchData[2], (Double) info.getGroup().getAverageForce());
             } else if (launchData.length == 1) {
                 launchDistance = ParseUtil.parseDouble(launchData[0], 2.0);
@@ -70,7 +71,7 @@ public class SignActionWait extends SignAction {
                             continue;
                         }
 
-                        SignActionEvent found = new SignActionEvent(sign.signBlock, sign.railBlock, info.getGroup());
+                        SignActionEvent found = new SignActionEvent(sign.signBlock, sign.rail, info.getGroup());
                         if (found.isType(distanceData)) {
                             distance = walkingPoint.movedTotal;
                             break walk;
@@ -97,17 +98,25 @@ public class SignActionWait extends SignAction {
 	            	return;
             	}
                 info.getGroup().getActions().clear();
-                info.getMember().getActions().addActionWaitOccupied(distance, delay, launchDistance, launchDirection, launchVelocity);
+                info.getMember().getActions().addActionWaitOccupied(distance, delay, launchDistance, launchDirection, launchVelocity)
+                        .setToggleLeversOf(info.getAttachedBlock());
             }
         } else if (info.isAction(SignActionType.REDSTONE_OFF)) {
-            if (!info.hasRailedMember()) return;
+            info.setLevers(false);
 
-            info.getGroup().getActions().clear();
+            if (info.hasRailedMember()) {
+                info.getGroup().getActions().clear();
+            }
         }
     }
 
     @Override
     public boolean build(SignChangeActionEvent event) {
-        return handleBuild(event, Permission.BUILD_WAIT, "train waiter sign", "waits the train until the tracks ahead are clear");
+        return SignBuildOptions.create()
+                .setPermission(Permission.BUILD_WAIT)
+                .setName("train waiter sign")
+                .setDescription("waits the train until the tracks ahead are clear")
+                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs/Waiter")
+                .handle(event.getPlayer());
     }
 }

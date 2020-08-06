@@ -26,6 +26,11 @@ public class RailTypeCrossing extends RailTypeHorizontal {
     }
 
     @Override
+    public BlockFace getDirection(Block railBlock) {
+        return Util.getPlateDirection(railBlock);
+    }
+
+    @Override
     public BlockFace[] getPossibleDirections(Block trackBlock) {
         BlockFace dir = getDirection(trackBlock);
         if (dir == BlockFace.SELF) {
@@ -33,11 +38,6 @@ public class RailTypeCrossing extends RailTypeHorizontal {
         } else {
             return RailTypeRegular.getPossibleDirections(dir);
         }
-    }
-
-    @Override
-    public BlockFace getDirection(Block railsBlock) {
-        return Util.getPlateDirection(railsBlock);
     }
 
     @Override

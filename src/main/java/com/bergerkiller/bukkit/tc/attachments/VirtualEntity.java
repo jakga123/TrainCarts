@@ -8,6 +8,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
+import com.bergerkiller.bukkit.common.Common;
 import com.bergerkiller.bukkit.common.controller.EntityNetworkController;
 import com.bergerkiller.bukkit.common.math.Matrix4x4;
 import com.bergerkiller.bukkit.common.math.Quaternion;
@@ -39,6 +40,28 @@ import com.bergerkiller.generated.net.minecraft.server.PacketPlayOutSpawnEntityL
  * The entity can be spawned or destroyed for individual players.
  */
 public class VirtualEntity {
+    /**
+     * Add this offset to the sit butt offset and the position is exactly where the center of the head is.
+     * This is where the player looks from.
+     */
+    public static final double PLAYER_SIT_BUTT_EYE_HEIGHT = 1.0;
+    /**
+     * The height offset a player sits on top of a chicken
+     */
+    public static final double PLAYER_SIT_CHICKEN_BUTT_OFFSET = -0.62;
+    /**
+     * The height offset a player sits on top of an armorstand
+     */
+    public static final double PLAYER_SIT_ARMORSTAND_BUTT_OFFSET = -0.27;
+    /**
+     * Look packet doesn't work on 1.15, glitches out, must send a look + move packet with 0/0/0 movement
+     */
+    private static final boolean IS_LOOK_PACKET_BUGGED = Common.evaluateMCVersion(">=", "1.15");
+    /**
+     * Legacy was needed for seats when a chicken was used
+     */
+    private static final boolean NEEDS_UNSTUCK_VECTOR = Boolean.FALSE.booleanValue();
+
     private final AttachmentManager manager;
     private final int entityId;
     private final UUID entityUUID;
@@ -159,6 +182,12 @@ public class VirtualEntity {
         this.posY = position.getY();
         this.posZ = position.getZ();
         this.posSet = true;
+    }
+
+    public void setRelativeOffset(Vector offset) {
+        this.relDx = offset.getX();
+        this.relDy = offset.getY();
+        this.relDz = offset.getZ();
     }
 
     public void setRelativeOffset(double dx, double dy, double dz) {
@@ -340,7 +369,7 @@ public class VirtualEntity {
         //System.out.println("SPAWN " + this.syncAbsX + "/" + this.syncAbsY + "/" + this.syncAbsZ + " ID=" + this.entityUUID);
 
         // Ensure we spawn with a little bit of movement when we are a seat
-        if (this.syncMode == SyncMode.SEAT) {
+        if (NEEDS_UNSTUCK_VECTOR && this.syncMode == SyncMode.SEAT) {
             double xzls = (motion.getX() * motion.getX()) + (motion.getZ() * motion.getZ());
             if (xzls < (0.002 * 0.002)) {
                 double y = motion.getY();
@@ -512,7 +541,7 @@ public class VirtualEntity {
             this.syncAbsZ += packet.getDeltaZ();
             broadcast(packet);
         } else if (rotated) {
-            if (this.syncMode == SyncMode.SEAT && rotatedNow) {
+            if (NEEDS_UNSTUCK_VECTOR && this.syncMode == SyncMode.SEAT && rotatedNow) {
                 // Send a very small movement change to correct rotation in a pulse
                 Vector v = getUnstuckVector();
                 PacketPlayOutRelEntityMoveLookHandle packet = PacketPlayOutRelEntityMoveLookHandle.createNew(
@@ -529,15 +558,32 @@ public class VirtualEntity {
                 broadcast(packet);
             } else {
                 // Only rotation changed
-                PacketPlayOutEntityLookHandle packet = PacketPlayOutEntityLookHandle.createNew(
-                        this.entityId,
-                        this.liveYaw,
-                        this.livePitch,
-                        false);
+                if (IS_LOOK_PACKET_BUGGED) {
+                    // On minecraft 1.15 and later there is a Minecraft client bug
+                    // Sending an Entity Look packet causes the client to cancel/ignore previous movement updates
+                    // This results in the entity position going out of sync
+                    // A workaround is sending a movement + look packet instead, which appears to work around that.
+                    PacketPlayOutRelEntityMoveLookHandle packet = PacketPlayOutRelEntityMoveLookHandle.createNew(
+                            this.entityId,
+                            0.0, 0.0, 0.0,
+                            this.liveYaw,
+                            this.livePitch,
+                            false);
 
-                this.syncYaw = this.liveYaw;
-                this.syncPitch = this.livePitch;
-                broadcast(packet);
+                    this.syncYaw = this.liveYaw;
+                    this.syncPitch = this.livePitch;
+                    broadcast(packet);
+                } else {
+                    PacketPlayOutEntityLookHandle packet = PacketPlayOutEntityLookHandle.createNew(
+                            this.entityId,
+                            this.liveYaw,
+                            this.livePitch,
+                            false);
+
+                    this.syncYaw = this.liveYaw;
+                    this.syncPitch = this.livePitch;
+                    broadcast(packet);
+                }
             }
         }
     }

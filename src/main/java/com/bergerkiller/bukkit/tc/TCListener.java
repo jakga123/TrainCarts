@@ -4,11 +4,9 @@ import com.bergerkiller.bukkit.common.BlockLocation;
 import com.bergerkiller.bukkit.common.Task;
 import com.bergerkiller.bukkit.common.bases.IntVector3;
 import com.bergerkiller.bukkit.common.collections.EntityMap;
-import com.bergerkiller.bukkit.common.conversion.type.HandleConversion;
 import com.bergerkiller.bukkit.common.entity.CommonEntity;
 import com.bergerkiller.bukkit.common.events.EntityAddEvent;
 import com.bergerkiller.bukkit.common.events.EntityRemoveFromServerEvent;
-import com.bergerkiller.bukkit.common.internal.CommonCapabilities;
 import com.bergerkiller.bukkit.common.map.MapDisplay;
 import com.bergerkiller.bukkit.common.nbt.CommonTagCompound;
 import com.bergerkiller.bukkit.common.protocol.CommonPacket;
@@ -17,7 +15,6 @@ import com.bergerkiller.bukkit.common.utils.*;
 import com.bergerkiller.bukkit.common.wrappers.BlockData;
 import com.bergerkiller.bukkit.common.wrappers.HumanHand;
 import com.bergerkiller.bukkit.tc.attachments.ProfileNameModifier;
-import com.bergerkiller.bukkit.tc.attachments.control.CartAttachmentSeat;
 import com.bergerkiller.bukkit.tc.attachments.control.light.LightAPIController;
 import com.bergerkiller.bukkit.tc.attachments.ui.AttachmentEditor;
 import com.bergerkiller.bukkit.tc.cache.RailSignCache;
@@ -32,18 +29,13 @@ import com.bergerkiller.bukkit.tc.events.SignActionEvent;
 import com.bergerkiller.bukkit.tc.pathfinding.PathNode;
 import com.bergerkiller.bukkit.tc.portals.PortalDestination;
 import com.bergerkiller.bukkit.tc.properties.CartProperties;
+import com.bergerkiller.bukkit.tc.properties.CartPropertiesStore;
 import com.bergerkiller.bukkit.tc.rails.type.RailType;
 import com.bergerkiller.bukkit.tc.signactions.SignAction;
 import com.bergerkiller.bukkit.tc.storage.OfflineGroupManager;
 import com.bergerkiller.bukkit.tc.tickets.TicketStore;
 import com.bergerkiller.bukkit.tc.utils.StoredTrainItemUtil;
 import com.bergerkiller.bukkit.tc.utils.TrackMap;
-import com.bergerkiller.generated.net.minecraft.server.EntityHandle;
-import com.bergerkiller.generated.net.minecraft.server.EntityMinecartRideableHandle;
-import com.bergerkiller.generated.net.minecraft.server.WorldHandle;
-import com.bergerkiller.mountiplex.reflection.ClassTemplate;
-import com.bergerkiller.mountiplex.reflection.SafeMethod;
-import com.bergerkiller.reflection.net.minecraft.server.NMSVector;
 
 import static com.bergerkiller.bukkit.common.utils.MaterialUtil.getMaterial;
 
@@ -218,16 +210,6 @@ public class TCListener implements Listener {
     public void onEntityAdd(EntityAddEvent event) {
         if (MinecartMemberStore.canConvertAutomatically(event.getEntity())) {
             MinecartMemberStore.convert((Minecart) event.getEntity());
-        } else if (event.getEntity() instanceof Minecart) {
-            // Temporary server bugfix: correct null dimension field for non-tc minecart entities
-            // These occurred due to an old bug in BKCommonLib
-            // This 'fix' can be removed after some time, when the issue is resolved for most people
-            if (CommonCapabilities.HAS_DIMENSION_MANAGER) {
-                Object raw_dim = EntityHandle.T.dimension.raw.get(HandleConversion.toEntityHandle(event.getEntity()));
-                if (raw_dim == null) {
-                    EntityHandle.fromBukkit(event.getEntity()).setDimension(WorldUtil.getDimension(event.getEntity().getWorld()));
-                }
-            }
         }
     }
 
@@ -289,18 +271,21 @@ public class TCListener implements Listener {
 
         if (event.getEntered() instanceof Player) {
             Player player = (Player) event.getEntered();
-            if (!prop.getPlayersEnter()) {
-                event.setCancelled(true);
-                return;
-            }
-            if (!prop.isPublic() && !prop.hasOwnership(player)) {
-                event.setCancelled(true);
-                return;
+            if (!member.isPassengerEnterForced(event.getEntered())) {
+                if (!prop.getPlayersEnter()) {
+                    event.setCancelled(true);
+                    return;
+                }
+                if (!prop.isPublic() && !prop.hasOwnership(player)) {
+                    event.setCancelled(true);
+                    return;
+                }
             }
             if (!TicketStore.handleTickets(player, member.getGroup().getProperties())) {
                 event.setCancelled(true);
                 return;
             }
+            CartPropertiesStore.setEditing(player, member.getProperties());
             prop.showEnterMessage(player);
         } else if (EntityUtil.isMob(event.getEntered())) {
             // This does not appear to be needed (anymore) to stop mobs from going into the Minecarts
@@ -367,7 +352,8 @@ public class TCListener implements Listener {
 
     /*
      * We must handle vehicle exit for when an unmount packet is received before
-     * the player is actually seated inside a vehicle.
+     * the player is actually seated inside a vehicle. Player exit is normally
+     * handled inside the packet listener instead of here.
      */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onVehicleExitCheck(VehicleExitEvent event) {
@@ -391,24 +377,9 @@ public class TCListener implements Listener {
             return;
         }
 
-        Location mloc = mm.getEntity().getLocation();
-        mloc.setYaw(FaceUtil.faceToYaw(mm.getDirection()));
-        mloc.setPitch(0.0f);
-
-        final Location loc;
-        MinecartMemberNetwork network = CommonUtil.tryCast(mm.getEntity().getNetworkController(), MinecartMemberNetwork.class);
-        CartAttachmentSeat seat = (network == null) ? null : network.findSeat(event.getExited());
-
-        if (seat == null) {
-            // Fallback
-            loc = MathUtil.move(mloc, mm.getProperties().exitOffset);
-        } else {
-            // Use seat
-            loc = seat.getEjectPosition(event.getExited());
-        }
-
         final Entity e = event.getExited();
         final Location old_location = e.getLocation();
+        final Location loc = mm.getPassengerEjectLocation(e);
 
         // Teleport to the exit position a tick later
         CommonUtil.nextTick(new Runnable() {
@@ -568,25 +539,6 @@ public class TCListener implements Listener {
 
             Material m = (event.getItem() == null) ? Material.AIR : event.getItem().getType();
 
-            // Tests the original MC slope calculations
-            if (false && m == Material.STICK) {
-                Object mc = EntityMinecartRideableHandle.T.newInstanceNull();
-                EntityHandle.T.world.set(mc, WorldHandle.fromBukkit(clickedBlock.getWorld()));
-
-                SafeMethod<Object> v = ClassTemplate.create(mc).getMethod("j", double.class, double.class, double.class);
-
-                double x = clickedBlock.getX() + 0.5;
-                double y = clickedBlock.getY() + 0.5;
-                double z = clickedBlock.getZ() + 0.5;
-
-                System.out.println("POS=" + x + ", " + y + ", "+  z);
-
-                for (double dx = -0.6; dx <= 0.6; dx += 0.05) {
-                    Object vec = v.invoke(mc, x + dx, y, z);
-                    System.out.println(dx + "," + (NMSVector.getVecY(vec)-y));
-                }
-            }
-
             // Track map debugging logic
             if (DEBUG_DO_TRACKTEST && m == Material.FEATHER) {
                 TrackMap map = new TrackMap(clickedBlock, FaceUtil.yawToFace(event.getPlayer().getLocation().getYaw() - 90, false));
@@ -622,7 +574,7 @@ public class TCListener implements Listener {
             }
 
             // Keep track of when a player interacts to detect spamming
-            long lastHitTime = LogicUtil.fixNull(lastHitTimes.get(event.getPlayer()), Long.MIN_VALUE);
+            long lastHitTime = lastHitTimes.getOrDefault(event.getPlayer(), Long.MIN_VALUE);
             long time = System.currentTimeMillis();
             long clickInterval = time - lastHitTime;
             lastHitTimes.put(event.getPlayer(), time);
@@ -659,7 +611,7 @@ public class TCListener implements Listener {
         }
 
         Block placedBlock = event.getClickedBlock().getRelative(event.getBlockFace());
-        if (placedBlock.getType() != Material.AIR) {
+        if (!MaterialUtil.ISAIR.get(placedBlock)) {
             return;
         }
 
@@ -671,7 +623,7 @@ public class TCListener implements Listener {
             // If the block below is air or rail, and above is a solid
             Block below = placedBlock.getRelative(BlockFace.DOWN);
             Block above = placedBlock.getRelative(BlockFace.UP);
-            if ((below.getType() == Material.AIR || Util.ISVERTRAIL.get(below)) && BlockUtil.isSuffocating(above)) {
+            if ((MaterialUtil.ISAIR.get(below) || Util.ISVERTRAIL.get(below)) && Util.isUpsideDownRailSupport(above)) {
 
                 // Custom placement of an upside-down normal rail
                 BlockPlaceEvent placeEvent = new BlockPlaceEvent(placedBlock, placedBlock.getState(),
@@ -739,7 +691,7 @@ public class TCListener implements Listener {
                     if (BlockUtil.canBuildBlock(clickedBlock, type)) {
                         // Edit the rails to make a connection/face the direction the player clicked
                         BlockFace direction = FaceUtil.getDirection(player.getLocation().getDirection(), false);
-                        BlockFace lastDirection = LogicUtil.fixNull(lastClickedDirection.get(player), direction);
+                        BlockFace lastDirection = lastClickedDirection.getOrDefault(player, direction);
                         Rails rails = BlockUtil.getRails(clickedBlock);
                         // First check whether we are clicking towards an up-slope block
                         if (BlockUtil.isSolid(clickedBlock.getRelative(direction))) {
@@ -886,6 +838,16 @@ public class TCListener implements Listener {
         // Handle the vehicle change
         if (event.getRightClicked() instanceof RideableMinecart) {
             event.setCancelled(!TrainCarts.handlePlayerVehicleChange(event.getPlayer(), event.getRightClicked()));
+
+            // Store right now what seats a player is eligible for based on where the player clicked
+            // If the Player indeed does enter the Minecart, then we know what seat to pick
+            MinecartMember<?> newMinecart = MinecartMemberStore.getFromEntity(event.getRightClicked());
+            if (!event.isCancelled() && newMinecart != null) {
+                MinecartMemberNetwork network = CommonUtil.tryCast(newMinecart.getEntity().getNetworkController(), MinecartMemberNetwork.class);
+                if (network != null) {
+                    network.storeSeatHint(event.getPlayer());
+                }
+            }
         }
     }
 

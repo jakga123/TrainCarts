@@ -13,11 +13,11 @@ import com.bergerkiller.bukkit.tc.controller.components.RailAABB;
 import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
 import com.bergerkiller.bukkit.tc.controller.components.RailJunction;
 import com.bergerkiller.bukkit.tc.controller.components.RailPath;
+import com.bergerkiller.bukkit.tc.controller.components.RailPath.Position;
 import com.bergerkiller.bukkit.tc.controller.components.RailState;
 import com.bergerkiller.bukkit.tc.editor.RailsTexture;
 import com.bergerkiller.bukkit.tc.rails.logic.RailLogic;
 import com.bergerkiller.bukkit.tc.rails.logic.RailLogicAir;
-import com.bergerkiller.bukkit.tc.rails.logic.RailLogicHorizontal;
 
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -440,12 +440,21 @@ public abstract class RailType {
 
     /**
      * Obtains the direction of this type of Rails.
-     * This is the direction along minecarts move.
+     * This is the direction along minecarts move.<br>
+     * <br>
+     * <b>Deprecated: BlockFace offers too little information, use RailState for computing this instead</b>
      *
      * @param railsBlock to get it for
      * @return rails Direction
      */
-    public abstract BlockFace getDirection(Block railsBlock);
+    @Deprecated
+    public BlockFace getDirection(Block railsBlock) {
+        RailState state = new RailState();
+        state.setRailPiece(RailPiece.create(this, railsBlock));
+        state.setPosition(Position.fromLocation(this.getSpawnLocation(railsBlock, BlockFace.SELF)));
+        state.initEnterDirection();
+        return state.enterFace();
+    }
 
     /**
      * Gets the track-relative direction to look for signs related to this Rails
@@ -454,6 +463,23 @@ public abstract class RailType {
      * @return direction to look for signs relating to this rails block
      */
     public abstract BlockFace getSignColumnDirection(Block railsBlock);
+
+    /**
+     * Gets the default trigger (movement) directions of trains on the rails
+     * that can activate signs. These directions can be overrided on the sign, so these
+     * are the default if none are specified.<br>
+     * <br>
+     * By default returns BLOCK_SIDES (up/down/north/east/south/west) to indicate all
+     * possible directions activate the sign.
+     * 
+     * @param railBlock The rail block that has this RailType
+     * @param signBlock The sign block of the sign being activated
+     * @param signFacing The facing of the sign being activated
+     * @return sign trigger directions
+     */
+    public BlockFace[] getSignTriggerDirections(Block railBlock, Block signBlock, BlockFace signFacing) {
+        return FaceUtil.BLOCK_SIDES;
+    }
 
     /**
      * Gets the first block of the sign column where signs for this rail are located.
@@ -593,18 +619,7 @@ public abstract class RailType {
      * @param orientation horizontal orientation of the one that placed the minecart
      * @return spawn location
      */
-    public Location getSpawnLocation(Block railsBlock, BlockFace orientation) {
-        Location at = this.findMinecartPos(railsBlock).getLocation();
-        if (this.isUpsideDown(railsBlock)) {
-            at.add(0.5, 1.0 + RailLogicHorizontal.Y_POS_OFFSET_UPSIDEDOWN, 0.5);
-            at.setPitch(-180.0F);
-        } else {
-            at.add(0.5, RailLogicHorizontal.Y_POS_OFFSET, 0.5);
-            at.setPitch(0.0F);
-        }
-        at.setYaw(FaceUtil.faceToYaw(orientation));
-        return at;
-    }
+    public abstract Location getSpawnLocation(Block railsBlock, BlockFace orientation);
 
     /**
      * Gets rails texture information about this Rail Type for a particular Block.

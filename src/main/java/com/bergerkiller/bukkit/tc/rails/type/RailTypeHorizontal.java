@@ -7,12 +7,22 @@ import com.bergerkiller.bukkit.common.utils.LogicUtil;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
+import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
+import com.bergerkiller.bukkit.tc.rails.logic.RailLogicHorizontal;
+
+import java.util.HashSet;
 
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.material.Rails;
 
 public abstract class RailTypeHorizontal extends RailType {
+
+    /**
+     * Must be implemented to set the (vanilla) movement direction of this rail
+     */
+    public abstract BlockFace getDirection(Block railBlock);
 
     @Override
     public Block findMinecartPos(Block trackBlock) {
@@ -187,25 +197,37 @@ public abstract class RailTypeHorizontal extends RailType {
     @Override
     public Location getSpawnLocation(Block railsBlock, BlockFace orientation) {
         BlockFace[] faces = this.getPossibleDirections(railsBlock);
-        if (faces[0] == faces[1].getOppositeFace()) {
-            // Straight horizontal rail
-            // Force one of the faces if neither matches
-            if (orientation != faces[0] && orientation != faces[1]) {
-                orientation = faces[0];
-            }
-        } else {
-            // Curved rail
-            BlockFace direction = FaceUtil.combine(faces[0], faces[1]);
-            direction = FaceUtil.rotate(direction, 2);
-            int diff_a = FaceUtil.getFaceYawDifference(direction, orientation);
-            int diff_b = FaceUtil.getFaceYawDifference(direction.getOppositeFace(), orientation);
-            if (diff_a < diff_b) {
-                orientation = direction;
+        if (faces != null && faces.length >= 2) {
+            if (faces[0] == faces[1].getOppositeFace()) {
+                // Straight horizontal rail
+                // Force one of the faces if neither matches
+                if (orientation != faces[0] && orientation != faces[1]) {
+                    orientation = faces[0];
+                }
             } else {
-                orientation = direction.getOppositeFace();
+                // Curved rail
+                BlockFace direction = FaceUtil.combine(faces[0], faces[1]);
+                direction = FaceUtil.rotate(direction, 2);
+                int diff_a = FaceUtil.getFaceYawDifference(direction, orientation);
+                int diff_b = FaceUtil.getFaceYawDifference(direction.getOppositeFace(), orientation);
+                if (diff_a < diff_b) {
+                    orientation = direction;
+                } else {
+                    orientation = direction.getOppositeFace();
+                }
             }
         }
-        return super.getSpawnLocation(railsBlock, orientation);
+
+        Location at = this.findMinecartPos(railsBlock).getLocation();
+        at.setDirection(FaceUtil.faceToVector(orientation));
+        if (this.isUpsideDown(railsBlock)) {
+            at.add(0.5, 1.0 + RailLogicHorizontal.Y_POS_OFFSET_UPSIDEDOWN, 0.5);
+            at.setPitch(-180.0F);
+        } else {
+            at.add(0.5, RailLogicHorizontal.Y_POS_OFFSET, 0.5);
+            at.setPitch(0.0F);
+        }
+        return at;
     }
 
     @Override
@@ -245,6 +267,50 @@ public abstract class RailTypeHorizontal extends RailType {
         } else {
             return BlockFace.DOWN;
         }
+    }
+
+    @Override
+    public BlockFace[] getSignTriggerDirections(Block railBlock, Block signBlock, BlockFace signFacing) {
+        RailPiece rail = RailPiece.create(this, railBlock);
+        HashSet<BlockFace> watchedFaces = new HashSet<>(4);
+        if (FaceUtil.isSubCardinal(signFacing)) {
+            // More advanced corner checks - NE/SE/SW/NW
+            // Use rail directions validated against sign facing to
+            // find out what directions are watched
+            BlockFace[] faces = FaceUtil.getFaces(signFacing);
+            for (BlockFace face : faces) {
+                if (Util.isConnectedRails(rail, face)) {
+                    watchedFaces.add(face.getOppositeFace());
+                }
+            }
+            // Try an inversed version, maybe rails can be found there
+            if (watchedFaces.isEmpty()) {
+                for (BlockFace face : faces) {
+                    if (Util.isConnectedRails(rail, face.getOppositeFace())) {
+                        watchedFaces.add(face);
+                    }
+                }
+            }
+        } else {
+            // Sloped rails also include UP/DOWN, handling from/to vertical rail movement
+            Rails rails = Util.getRailsRO(railBlock);
+            if (rails != null && rails.isOnSlope()) {
+                watchedFaces.add(BlockFace.UP);
+                watchedFaces.add(BlockFace.DOWN);
+            }
+
+            // Simple facing checks - NESW
+            BlockFace facing = signFacing;
+            if (Util.isConnectedRails(rail, facing)) {
+                watchedFaces.add(facing.getOppositeFace());
+            } else if (Util.isConnectedRails(rail, facing.getOppositeFace())) {
+                watchedFaces.add(facing);
+            } else {
+                watchedFaces.add(FaceUtil.rotate(facing, -2));
+                watchedFaces.add(FaceUtil.rotate(facing, 2));
+            }
+        }
+        return watchedFaces.toArray(new BlockFace[watchedFaces.size()]);
     }
 
     @Override

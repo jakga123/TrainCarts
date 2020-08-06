@@ -28,7 +28,6 @@ import com.bergerkiller.bukkit.tc.itemanimation.ItemAnimation;
 import com.bergerkiller.bukkit.tc.pathfinding.PathProvider;
 import com.bergerkiller.bukkit.tc.pathfinding.RouteManager;
 import com.bergerkiller.bukkit.tc.portals.TCPortalManager;
-import com.bergerkiller.bukkit.tc.properties.CartPropertiesStore;
 import com.bergerkiller.bukkit.tc.properties.SavedTrainPropertiesStore;
 import com.bergerkiller.bukkit.tc.properties.TrainProperties;
 import com.bergerkiller.bukkit.tc.signactions.SignAction;
@@ -41,6 +40,7 @@ import com.bergerkiller.bukkit.tc.storage.OfflineGroupManager;
 import com.bergerkiller.bukkit.tc.tickets.TicketStore;
 import com.bergerkiller.mountiplex.conversion.Conversion;
 
+import me.m56738.smoothcoasters.api.SmoothCoastersAPI;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -79,6 +79,7 @@ public class TrainCarts extends PluginBase {
     private PathProvider pathProvider;
     private RouteManager routeManager;
     private Economy econ = null;
+    private SmoothCoastersAPI smoothCoastersAPI;
 
     /**
      * Gets a helper class for assigning (fake) entities to teams to change their glowing effect
@@ -153,6 +154,10 @@ public class TrainCarts extends PluginBase {
      */
     public Economy getEconomy() {
         return econ;
+    }
+
+    public SmoothCoastersAPI getSmoothCoastersAPI() {
+        return smoothCoastersAPI;
     }
 
     public static boolean canBreak(Material type) {
@@ -237,9 +242,6 @@ public class TrainCarts extends PluginBase {
     public static boolean handlePlayerVehicleChange(Player player, Entity newVehicle) {
         try {
             MinecartMember<?> newMinecart = MinecartMemberStore.getFromEntity(newVehicle);
-            if (newMinecart != null) {
-                CartPropertiesStore.setEditing(player, newMinecart.getProperties());
-            }
 
             // Allow exiting the current minecart
             MinecartMember<?> entered = MinecartMemberStore.getFromEntity(player.getVehicle());
@@ -387,6 +389,9 @@ public class TrainCarts extends PluginBase {
         this.routeManager = new RouteManager(getDataFolder() + File.separator + "routes.yml");
         this.routeManager.load();
 
+        //Initialize SmoothCoastersAPI
+        this.smoothCoastersAPI = new SmoothCoastersAPI(this);
+
         //Initialize seat attachment map
         this.seatAttachmentMap = new SeatAttachmentMap();
         this.register((PacketListener) this.seatAttachmentMap, SeatAttachmentMap.LISTENED_TYPES);
@@ -526,8 +531,10 @@ public class TrainCarts extends PluginBase {
         //Unregister listeners
         this.unregister(packetListener);
         this.unregister(interactionPacketListener);
+        smoothCoastersAPI.unregister();
         packetListener = null;
         interactionPacketListener = null;
+        smoothCoastersAPI = null;
 
         //Stop tasks
         Task.stop(signtask);

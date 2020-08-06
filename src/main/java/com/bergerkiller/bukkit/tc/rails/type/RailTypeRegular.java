@@ -142,8 +142,7 @@ public class RailTypeRegular extends RailTypeHorizontal {
         // Shortcut for BlockData 'AIR', as this is the most common type you're going to get
         // isSuffocating() should be a fast call, but it goes through some layers, so why not.
         Block blockAbove = railsBlock.getRelative(BlockFace.UP);
-        BlockData blockDataAbove = WorldUtil.getBlockData(blockAbove);
-        if (blockDataAbove == BlockData.AIR || !blockDataAbove.isSuffocating(blockAbove)) {
+        if (!Util.isUpsideDownRailSupport(blockAbove)) {
             return false;
         }
 
@@ -383,6 +382,10 @@ public class RailTypeRegular extends RailTypeHorizontal {
     @Override
     public Location getSpawnLocation(Block railsBlock, BlockFace orientation) {
         Rails rails = Util.getRailsRO(railsBlock);
+        if (rails == null) {
+            return super.getSpawnLocation(railsBlock, orientation);
+        }
+
         BlockFace dir = FaceUtil.getRailsCartDirection(rails.getDirection());
         if (FaceUtil.getFaceYawDifference(dir.getOppositeFace(), orientation) < 90) {
             dir = dir.getOppositeFace();

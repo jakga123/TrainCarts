@@ -26,13 +26,7 @@ public class ArrivalSigns {
     private static Task updateTask;
 
     public static TimeSign getTimer(String name) {
-        TimeSign t = timerSigns.get(name);
-        if (t == null) {
-            t = new TimeSign();
-            t.name = name;
-            timerSigns.put(name, t);
-        }
-        return t;
+        return timerSigns.computeIfAbsent(name, new_timesign_name -> new TimeSign(new_timesign_name));
     }
 
     public static boolean isTrigger(Sign sign) {
@@ -139,7 +133,7 @@ public class ArrivalSigns {
                     }
                     for (TimeCalculation calc : timeCalculations.values()) {
                         if (calc.member != null) {
-                            if (calc.member.getEntity().isDead() || !calc.member.getEntity().isMoving()) {
+                            if (calc.member.isUnloaded() || calc.member.getEntity().isDead() || !calc.member.getEntity().isMoving()) {
                                 calc.setTime();
                                 timeCalculations.remove(calc.signblock);
                                 return;
@@ -185,6 +179,10 @@ public class ArrivalSigns {
         public long startTime = -1;
         public long duration;
         private String name;
+
+        public TimeSign(String name) {
+            this.name = name;
+        }
 
         public void trigger() {
             this.startTime = System.currentTimeMillis();

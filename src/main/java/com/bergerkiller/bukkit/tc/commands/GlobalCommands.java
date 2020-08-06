@@ -13,6 +13,7 @@ import com.bergerkiller.bukkit.common.utils.MathUtil;
 import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.common.utils.StringUtil;
 import com.bergerkiller.bukkit.common.utils.WorldUtil;
+import com.bergerkiller.bukkit.common.wrappers.ChatText;
 import com.bergerkiller.bukkit.common.wrappers.HumanHand;
 import com.bergerkiller.bukkit.tc.Localization;
 import com.bergerkiller.bukkit.tc.Permission;
@@ -125,24 +126,35 @@ public class GlobalCommands {
             }
 
             // Get editor instance
-            AttachmentEditor editor = MapDisplay.getHeldDisplay((Player) sender, AttachmentEditor.class);
-            if (editor == null) {
-                sender.sendMessage(ChatColor.RED + "You do not have the attachment editor open");
+            MapDisplay display = MapDisplay.getHeldDisplay((Player) sender, AttachmentEditor.class);
+            if (display == null) {
+                display = MapDisplay.getHeldDisplay((Player) sender);
+                if (display == null) {
+                    sender.sendMessage(ChatColor.RED + "You do not have an editor menu open");
+                    return true;
+                }
             }
 
             // Find focused widget
-            MapWidget focused = editor.getFocusedWidget();
-            if (focused == null) {
-                focused = editor.getActivatedWidget();
+            MapWidget focused = display.getFocusedWidget();
+            if (!(focused instanceof SetValueTarget)) {
+                focused = display.getActivatedWidget();
             }
-            if (args[1].equals("set") && focused instanceof SetValueTarget) {
+            if (!(focused instanceof SetValueTarget)) {
+                sender.sendMessage(ChatColor.RED + "No suitable menu item is active!");
+                return true;
+            }
+
+            // Got a target, input the value into it
+            SetValueTarget target = (SetValueTarget) focused;
+            if (args[1].equals("set")) {
                 String fullValue = args[2];
                 for (int n = 3; n < args.length; n++) {
                     fullValue += " " + args[n];
                 }
 
-                boolean success = ((SetValueTarget) focused).acceptTextValue(fullValue);
-                String propname = ((SetValueTarget) focused).getAcceptedPropertyName();
+                boolean success = target.acceptTextValue(fullValue);
+                String propname = target.getAcceptedPropertyName();
                 if (success) {
                     sender.sendMessage(ChatColor.GREEN + propname + " has been updated");
                 } else {
@@ -151,7 +163,7 @@ public class GlobalCommands {
                 return true;
             }
 
-            sender.sendMessage(ChatColor.RED + "Unknown command or no suitable menu item is active!");
+            sender.sendMessage(ChatColor.RED + "Unknown command! Try /train menu set [value]");
             return true;
         } else if (args[0].equals("reroute")) {
             Permission.COMMAND_REROUTE.handle(sender);
@@ -399,25 +411,99 @@ public class GlobalCommands {
             return true;
         } else if (args[0].equals("issue")) {
             Permission.COMMAND_ISSUE.handle(sender);
-            MessageBuilder builder = new MessageBuilder();
-            builder.yellow("Click here to report an issue with TrainCarts: ");
-            try {
-                String template = "##### BkCommonLib version: " + CommonPlugin.getInstance().getDebugVersion() +
-                        "\n##### TrainCarts version: " + TrainCarts.plugin.getDebugVersion() +
-                        "\n##### Spigot version: " + Bukkit.getVersion() +
-                        "\n\n" +
-                        "<hr>\n" +
-                        "\n" +
-                        "#### Problem or bug:\n" +
-                        "\n" +
-                        "#### Expected behaviour:\n" +
-                        "\n" +
-                        "#### Steps to reproduce:\n";
-                builder.white("https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(template, "UTF-8"));
-            } catch (UnsupportedEncodingException e) {
-                builder.white("https://github.com/bergerhealer/TrainCarts/issues/new");
+            if(sender instanceof Player){
+                Player player = (Player)sender;
+    
+                ChatText chatText = ChatText.fromMessage(ChatColor.YELLOW.toString() + "Click one of the below options to open an issue on GitHub:");
+                chatText.sendTo(player);
+                try{
+                    String bugReport = "## Info" +
+                            "\nPlease provide the following information:" +
+                            "\n" +
+                            "\n- BKCommonLib Version: " + CommonPlugin.getInstance().getDebugVersion() +
+                            "\n- TrainCarts Version: " + TrainCarts.plugin.getDebugVersion() +
+                            "\n- Server Type and Version: " + Bukkit.getVersion() +
+                            "\n" +
+                            "\n----" +
+                            "\n## Bug" +
+                            "\n" +
+                            "\n### Description" +
+                            "\n" +
+                            "\n### Expected Behaviour" +
+                            "\n" +
+                            "\n### Actual Behaviour" +
+                            "\n" +
+                            "\n### Steps to reproduce" +
+                            "\n" +
+                            "\n### Additional Information" +
+                            "\n*This issue was created using the `/train issue` command!*";
+                    
+                    String featureRequest = "## Feature Request" +
+                            "\n" +
+                            "\n### Description" +
+                            "\n" +
+                            "\n### Examples";
+                    
+                    chatText = ChatText.empty().appendClickableURL(ChatColor.RED.toString() + ChatColor.UNDERLINE.toString() + "Bug Report", 
+                            "https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(bugReport, "UTF-8"),
+                            "Click to open a Bug Report");
+                    chatText.sendTo(player);
+                    
+                    chatText = ChatText.empty().appendClickableURL(ChatColor.GREEN.toString() + ChatColor.UNDERLINE.toString() + "Feature Request",
+                            "https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(featureRequest, "UTF-8"),
+                            "Click to open a Feature Request");
+                    chatText.sendTo(player);
+                }catch(UnsupportedEncodingException ex){
+                    chatText = ChatText.empty().appendClickableURL(ChatColor.RED.toString() + ChatColor.UNDERLINE.toString() + "Bug Report",
+                            "https://github.com/bergerhealer/TrainCarts/issues/new?template=bug_report.md",
+                            "Click to open a Bug Report");
+                    chatText.sendTo(player);
+                    
+                    chatText = ChatText.empty().appendClickableURL(ChatColor.GREEN.toString() + ChatColor.UNDERLINE.toString() + "Feature Request",
+                            "https://github.com/bergerhealer/TrainCarts/issues/new?template=feature_request.md",
+                            "Click to open a Feature Request");
+                    chatText.sendTo(player);
+                }
+            }else{
+                MessageBuilder builder = new MessageBuilder();
+                builder.white("Click one of the below URLs to open an issue on GitHub:");
+                
+                try{
+                    String bugReport = "## Info" +
+                            "\nPlease provide the following information:" +
+                            "\n" +
+                            "\n- BKCommonLib Version: " + CommonPlugin.getInstance().getDebugVersion() +
+                            "\n- TrainCarts Version: " + TrainCarts.plugin.getDebugVersion() +
+                            "\n- Server Type and Version: " + Bukkit.getVersion() +
+                            "\n" +
+                            "\n----" +
+                            "\n## Bug" +
+                            "\n" +
+                            "\n### Description" +
+                            "\n" +
+                            "\n### Expected Behaviour" +
+                            "\n" +
+                            "\n### Actual Behaviour" +
+                            "\n" +
+                            "\n### Steps to reproduce" +
+                            "\n" +
+                            "\n### Additional Information" +
+                            "\n*This issue was created using the `/train issue` command!*";
+    
+                    String featureRequest = "## Feature Request" +
+                            "\n" +
+                            "\n### Description" +
+                            "\n" +
+                            "\n### Examples";
+                    
+                    builder.white("Bug Report: https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(bugReport, "UTF-8"))
+                           .append("Feature Request: https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(featureRequest, "UTF-8"));
+                }catch(UnsupportedEncodingException ex){
+                    builder.white("Bug Report: https://github.com/bergerhealer/TrainCarts/issues/new?template=bug_report.md")
+                           .append("Feature Request: https://github.com/bergerhealer/TrainCarts/issues/new?template=feature_request.md");
+                }
+                builder.send(sender);
             }
-            builder.send(sender);
             return true;
         } else if (args[0].equals("editor")) {
             Permission.COMMAND_GIVE_EDITOR.handle(sender);
@@ -535,6 +621,10 @@ public class GlobalCommands {
             } else {
                 player.sendMessage(ChatColor.RED + "Specify the type of debug to perform!");
                 player.sendMessage(ChatColor.RED + "/train debug rails - debug rails");
+                player.sendMessage(ChatColor.RED + "/train debug destination [destination] - debug destination pathfinding");
+                player.sendMessage(ChatColor.RED + "/train debug mutex - display mutex zones near you");
+                player.sendMessage(ChatColor.RED + "/train debug railtracker [boolean] - debug tracked rail positions");
+                player.sendMessage(ChatColor.RED + "/train debug wheeltracker [boolean] - debug tracked wheel positions");
             }
             return true;
         }

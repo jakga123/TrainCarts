@@ -1,14 +1,16 @@
 package com.bergerkiller.bukkit.tc.signactions;
 
+import com.bergerkiller.bukkit.common.resources.ResourceKey;
+import com.bergerkiller.bukkit.common.resources.SoundEffect;
 import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.common.utils.StringUtil;
 import com.bergerkiller.bukkit.common.utils.WorldUtil;
-import com.bergerkiller.bukkit.common.wrappers.ResourceKey;
 import com.bergerkiller.bukkit.tc.Permission;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
 import com.bergerkiller.bukkit.tc.events.SignChangeActionEvent;
+import com.bergerkiller.bukkit.tc.utils.SignBuildOptions;
 
 import net.md_5.bungee.api.ChatColor;
 
@@ -20,9 +22,9 @@ public class SignActionSound extends SignAction {
         return info.isType("sound", "msound");
     }
 
-    public ResourceKey getSound(SignActionEvent info) {
+    public ResourceKey<SoundEffect> getSound(SignActionEvent info) {
         try {
-            return ResourceKey.fromPath(info.getLine(2) + info.getLine(3));
+            return SoundEffect.fromName(info.getLine(2) + info.getLine(3));
         } catch (Throwable t) {
             return null;
         }
@@ -33,7 +35,7 @@ public class SignActionSound extends SignAction {
         boolean move = info.isType("msound");
         if (!info.isPowered()) return;
 
-        ResourceKey sound = getSound(info);
+        ResourceKey<SoundEffect> sound = getSound(info);
         if (sound == null) {
             return;
         }
@@ -99,14 +101,20 @@ public class SignActionSound extends SignAction {
             return false;
         }
         String app = event.isType("msound") ? " while moving" : "";
+
+        SignBuildOptions opt = SignBuildOptions.create()
+                .setPermission(Permission.BUILD_SOUND)
+                .setName(event.isCartSign() ? "cart sound player" : "train sound player")
+                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs/Sound");
+
         if (event.isCartSign()) {
-            return handleBuild(event, Permission.BUILD_SOUND, "cart sound player", "play a sound in the minecart" + app);
+            opt.setDescription("play a sound in the minecart" + app);
         } else if (event.isTrainSign()) {
-            return handleBuild(event, Permission.BUILD_SOUND, "train sound player", "play a sound in all minecarts of the train" + app);
+            opt.setDescription("play a sound in all minecarts of the train" + app);
         } else if (event.isRCSign()) {
-            return handleBuild(event, Permission.BUILD_SOUND, "train sound player", "play a sound in all minecarts of the train" + app);
+            opt.setDescription("play a sound in all minecarts of the train" + app);
         }
-        return false;
+        return opt.handle(event.getPlayer());
     }
 
     @Override

@@ -55,7 +55,6 @@ public class TCConfig {
     public static boolean useCoalFromStorageCart;
     public static boolean setOwnerOnPlacement;
     public static boolean keepChunksLoadedOnlyWhenMoving;
-    public static boolean playSoundAtStation;
     public static int maxDetectorLength;
     public static int maxMinecartStackSize;
     public static int defaultTransferRadius;
@@ -88,13 +87,19 @@ public class TCConfig {
     public static boolean claimNewSavedTrains = true;
     public static boolean onlyPoweredEmptySwitchersDoPathfinding = false;
     public static boolean enableSneakingInAttachmentEditor = false;
+    public static boolean playHissWhenStopAtStation = true;
+    public static boolean playHissWhenDestroyedBySign = true;
+    public static boolean playHissWhenLinked = true;
+    public static boolean playHissWhenCartRemoved = true;
     public static String launchFunctionType = "bezier";
     public static boolean parseOldSigns;
     public static boolean allowParenthesesFormat = true;
+    public static boolean upsideDownSupportedByAll = false;
     public static int tickUpdateDivider = 1; // allows slowing down of minecart physics globally (debugging!)
     public static int tickUpdateNow = 0; // forces update ticks
     public static boolean tickUpdateEnabled = true; // whether train tick updates are enabled
     public static int autoSaveInterval = 30 * 20; // autosave every 30 seconds
+    public static boolean allowExternalTicketImagePaths = false; // Whether images outside of the images subdirectory are allowed
     public static String currencyFormat;
     public static Set<Material> allowedBlockBreakTypes = new HashSet<>();
     public static Set<String> disabledWorlds = new HashSet<>();
@@ -205,9 +210,6 @@ public class TCConfig {
         config.setHeader("setOwnerOnPlacement", "\nWhether or not the player that places a minecart is set owner");
         setOwnerOnPlacement = config.get("setOwnerOnPlacement", true);
 
-        config.setHeader("playSoundAtStation", "\nWhether or not a hissing sound is made when trains stop at a station");
-        playSoundAtStation = config.get("playSoundAtStation", true);
-
         config.setHeader("launchFunction", "\nWhat style of launching to use in stations and launcher sign systems by default. Possible values:\n" +
                 "- 'linear': gradually switches from one motion speed to another at a linear rate\n" +
                 "- 'bezier': uses a bezier curve (ease in-out), resulting in slower changes in motion at start/end of launch");
@@ -253,6 +255,8 @@ public class TCConfig {
 
         config.setHeader("enableSeatThirdPersonView", "\nEnable or disable seeing yourself in third-person on vertical rails");
         config.addHeader("enableSeatThirdPersonView", "Turning this off only causes this mode to activate when going upside-down");
+        config.addHeader("enableSeatThirdPersonView", "If third person view is explicitly selected for the seat, this option is ignored");
+        config.addHeader("enableSeatThirdPersonView", "This option is only active when FPV (First person view) is set to DYNAMIC");
         enableSeatThirdPersonView = config.get("enableSeatThirdPersonView", false);
 
         config.setHeader("maxDetectorLength", "\nThe maximum length a detector region (between two detectors) can be");
@@ -484,6 +488,36 @@ public class TCConfig {
             putParsers(entry.getKey(), Util.getParsers(entry.getValue()));
             itemshort.setRead(entry.getKey());
         }
+
+        // Whether images can be loaded outside of the /images subdirectory
+        config.setHeader("allowExternalTicketImagePaths", "\nWhether ticket background images can be loaded outside of");
+        config.addHeader("allowExternalTicketImagePaths", "the 'plugins/Train_Carts/images' subdirectory. Enabling this may");
+        config.addHeader("allowExternalTicketImagePaths", "allow players to view private server data!");
+        allowExternalTicketImagePaths = config.get("allowExternalTicketImagePaths", false);
+
+        // Migrate 'playSoundAtStation' to sounds sub-section
+        if (config.contains("playSoundAtStation")) {
+            config.set("sounds.hissWhenStopAtStation", config.get("playSoundAtStation", true));
+            config.remove("playSoundAtStation");
+        }
+
+        // Sound configuration options
+        config.setHeader("sounds", "\nConfigures the different sound effects used in traincarts globally");
+        ConfigurationNode soundsConfig = config.getNode("sounds");
+        config.setHeader("hissWhenStopAtStation", "Enable/disable hiss sound played when trains stop at stations");
+        playHissWhenStopAtStation = soundsConfig.get("hissWhenStopAtStation", true);
+        config.setHeader("hissWhenDestroyedBySign", "Enable/disable hiss sound played when carts are destroyed by a destroy sign");
+        playHissWhenDestroyedBySign = soundsConfig.get("hissWhenDestroyedBySign", true);
+        config.setHeader("playHissWhenCartRemoved", "Enable/disable hiss sound played when a cart is removed from a train (destroyed/unlinked)");
+        playHissWhenCartRemoved = soundsConfig.get("playHissWhenCartRemoved", true);
+        config.setHeader("hissWhenLinked", "Enable/disable hiss sound played when two carts connect together");
+        playHissWhenLinked = soundsConfig.get("hissWhenLinked", true);
+
+        // Whether only solid blocks support upside-down rails, or any type of block with collision
+        config.setHeader("upsideDownSupportedByAll", "\nWhether any block supporting things underneath can hold upside-down rails");
+        config.addHeader("upsideDownSupportedByAll", "If true, blocks like glass and barrier blocks can hold upside-down rails");
+        config.addHeader("upsideDownSupportedByAll", "If false, only fully-solid blocks can hold them");
+        upsideDownSupportedByAll = config.get("upsideDownSupportedByAll", true);
     }
 
     public static void putParsers(String key, ItemParser[] parsersArr) {

@@ -8,6 +8,8 @@ import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
 import com.bergerkiller.bukkit.tc.events.SignChangeActionEvent;
+import com.bergerkiller.bukkit.tc.utils.SignBuildOptions;
+
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -96,7 +98,7 @@ public class SignActionEnter extends SignAction {
                 if (canEnter(entity, enterPlayers, enterMobs, enterMisc)) {
                     // Look for an Empty minecart to put him in
                     for (MinecartMember<?> member : members) {
-                        if (member.getAvailableSeatCount() > 0 && member.getEntity().addPassenger(entity)) {
+                        if (member.getAvailableSeatCount(entity) > 0 && member.addPassengerForced(entity)) {
                             break;
                         }
                     }
@@ -108,16 +110,15 @@ public class SignActionEnter extends SignAction {
             double distance;
             Entity selectedEntity;
             for (MinecartMember<?> member : members) {
-                if (member.getAvailableSeatCount() == 0) {
-                    continue;
-                }
-
                 List<Entity> nearby = member.getEntity().getNearbyEntities(radiusXZ, radiusY, radiusXZ);
-                while (!nearby.isEmpty() && member.getAvailableSeatCount() > 0) {
+                while (!nearby.isEmpty()) {
                     lastDistance = Double.MAX_VALUE;
                     selectedEntity = null;
                     for (Entity entity : nearby) {
                         if (entity.getVehicle() != null || !canEnter(entity, enterPlayers, enterMobs, enterMisc)) {
+                            continue;
+                        }
+                        if (member.getAvailableSeatCount(entity) == 0) {
                             continue;
                         }
                         distance = member.getEntity().loc.distanceSquared(entity);
@@ -130,7 +131,7 @@ public class SignActionEnter extends SignAction {
                     // Try to enter
                     if (selectedEntity != null) {
                         nearby.remove(selectedEntity);
-                        member.getEntity().addPassenger(selectedEntity);
+                        member.addPassengerForced(selectedEntity);
                     } else {
                         break;
                     }
@@ -148,6 +149,11 @@ public class SignActionEnter extends SignAction {
 
     @Override
     public boolean build(SignChangeActionEvent event) {
-        return handleBuild(event, Permission.BUILD_ENTER, "train enter sign", "cause nearby players/mobs to enter the train");
+        return SignBuildOptions.create()
+                .setPermission(Permission.BUILD_ENTER)
+                .setName("train enter sign")
+                .setDescription("cause nearby players/mobs to enter the train")
+                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs/Enter")
+                .handle(event.getPlayer());
     }
 }

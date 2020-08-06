@@ -51,6 +51,8 @@ import com.bergerkiller.bukkit.common.utils.WorldUtil;
 import com.bergerkiller.bukkit.common.wrappers.BlockData;
 import com.bergerkiller.bukkit.tc.cache.RailSignCache;
 import com.bergerkiller.bukkit.tc.controller.components.RailJunction;
+import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
+import com.bergerkiller.bukkit.tc.controller.components.RailState;
 import com.bergerkiller.bukkit.tc.properties.IParsable;
 import com.bergerkiller.bukkit.tc.properties.IProperties;
 import com.bergerkiller.bukkit.tc.properties.IPropertiesHolder;
@@ -212,8 +214,15 @@ public class Util {
         return found;
     }
 
+    /**
+     * <b>Deprecated: use RailSignCache.getRailsFromSign(signblock) instead</b>
+     * 
+     * @param signblock
+     * @return rail block
+     */
+    @Deprecated
     public static Block getRailsFromSign(Block signblock) {
-        return RailSignCache.getRailsFromSign(signblock);
+        return RailSignCache.getRailsFromSign(signblock).block();
     }
 
     public static Block findRailsVertical(Block from, BlockFace mode) {
@@ -1326,5 +1335,83 @@ public class Util {
         if (setBlockActivationEnabledMethod != null) {
             setBlockActivationEnabledMethod.invoke(controller, enabled);
         }
+    }
+
+    /**
+     * Checks whether a given direction motion vector is sub-cardinal,
+     * pointing into a diagonal and not along a single axis.
+     * The y-axis is ignored.
+     * 
+     * @param direction
+     * @return True if diagonal
+     */
+    public static boolean isDiagonal(Vector direction) {
+        double sq_x = direction.getX() * direction.getX();
+        double sq_z = direction.getZ() * direction.getZ();
+        double sq_xz = sq_x + sq_z;
+        return sq_xz >= 1e-10 &&
+               (sq_x / sq_xz) < SQ_COS_22_5 &&
+               (sq_z / sq_xz) < SQ_COS_22_5;
+    }
+    private static final double SQ_COS_22_5 = Math.pow(Math.cos(Math.PI / 8.0), 2.0);
+
+    /**
+     * Check if a rails block connects with another rails block in the direction specified
+     *
+     * @param rails The rails block and type to connect from
+     * @param direction to connect to
+     * @return True if connected, False if not
+     */
+    public static boolean isConnectedRails(RailPiece rails, BlockFace direction) {
+        // Check not invalid
+        if (rails == null || rails.block() == null) {
+            return false;
+        }
+
+        // Move from the current rail minecart position one block into the direction
+        // Check if a rail exists there. If there is, check if it points at this rail
+        // If so, then there is a rails there!
+        RailJunction junction = Util.faceToJunction(rails.type().getJunctions(rails.block()), direction);
+        if (junction == null) {
+            return false;
+        }
+        RailState state = rails.type().takeJunction(rails.block(), junction);
+        if (state == null) {
+            return false;
+        }
+
+        // Move backwards again from the rails found
+        state.setMotionVector(state.motionVector().multiply(-1.0));
+        state.initEnterDirection();
+        TrackWalkingPoint wp = new TrackWalkingPoint(state);
+        wp.skipFirst();
+        if (!wp.moveFull()) {
+            return false;
+        }
+
+        // Verify this is the Block we came from
+        return wp.state.railType() == rails.type() &&
+               wp.state.railBlock().equals(rails.block());
+    }
+
+    public static boolean isUpsideDownRailSupport(Block block) {
+        BlockData blockdata = WorldUtil.getBlockData(block);
+
+        // Shortcut for most common case
+        if (blockdata == BlockData.AIR) {
+            return false;
+        }
+
+        // Fully solid (suffocating) blocks are always supports
+        if (blockdata.isSuffocating(block)) {
+            return true;
+        }
+
+        // Configurable: do we allow all blocks with a hitbox to support upside-down rails?
+        if (TCConfig.upsideDownSupportedByAll && blockdata.canSupportOnFace(block, BlockFace.DOWN)) {
+            return true;
+        }
+
+        return false;
     }
 }

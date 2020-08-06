@@ -1,11 +1,15 @@
 package com.bergerkiller.bukkit.tc.controller.type;
 
 import com.bergerkiller.bukkit.common.entity.type.CommonMinecartRideable;
+import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.wrappers.HumanHand;
+import com.bergerkiller.bukkit.common.wrappers.InteractionResult;
 import com.bergerkiller.bukkit.tc.exception.GroupUnloadedException;
 import com.bergerkiller.bukkit.tc.exception.MemberMissingException;
+import com.bergerkiller.bukkit.tc.properties.TrainProperties;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
+import com.bergerkiller.bukkit.tc.controller.MinecartMemberNetwork;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,21 +22,39 @@ public class MinecartMemberRideable extends MinecartMember<CommonMinecartRideabl
     private List<Entity> oldPassengers = new ArrayList<Entity>();
 
     @Override
-    public boolean onInteractBy(HumanEntity interacter, HumanHand hand) {
+    public InteractionResult onInteractBy(HumanEntity interacter, HumanHand hand) {
         // Note: humans can technically sneak too! But Bukkit has no method for it in the API.
         if ((interacter instanceof Player) && ((Player) interacter).isSneaking()) {
-            return false;
+            return InteractionResult.PASS;
         }
 
         // Is there a seat available to add a player?
-        if (this.getAvailableSeatCount() == 0) {
-            return false;
+        if (this.getAvailableSeatCount(interacter) == 0) {
+            return InteractionResult.PASS;
+        }
+
+        // If already a passenger, all we do here is try to swap seats
+        // If the player goes to the same seat he is already in, nothing happens
+        if (this.entity.isPassenger(interacter)) {
+            // If playerexit or playerenter are false, do not allow switching seats
+            TrainProperties tprop = this.getGroup().getProperties();
+            if (!tprop.getPlayersExit() || !tprop.getPlayersEnter()) {
+                return InteractionResult.PASS;
+            }
+
+            // Tell the network handler to change seats
+            MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
+            if (network != null && network.changeSeats(interacter)) {
+                return InteractionResult.SUCCESS;
+            } else {
+                return InteractionResult.PASS;
+            }
         }
 
         // Attempt to add the passenger
         // This may fail after an event is fired
         this.entity.addPassenger(interacter);
-        return true;
+        return InteractionResult.SUCCESS;
     }
 
     @Override

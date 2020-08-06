@@ -24,6 +24,7 @@ import org.bukkit.entity.Vehicle;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.vehicle.VehicleDamageEvent;
 import org.bukkit.event.vehicle.VehicleDestroyEvent;
+import org.bukkit.event.vehicle.VehicleEntityCollisionEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.event.vehicle.VehicleUpdateEvent;
 import org.bukkit.inventory.ItemStack;
@@ -40,7 +41,7 @@ import com.bergerkiller.bukkit.common.controller.EntityController;
 import com.bergerkiller.bukkit.common.entity.type.CommonMinecart;
 import com.bergerkiller.bukkit.common.math.Matrix4x4;
 import com.bergerkiller.bukkit.common.math.Quaternion;
-import com.bergerkiller.bukkit.common.resources.CommonSounds;
+import com.bergerkiller.bukkit.common.resources.SoundEffect;
 import com.bergerkiller.bukkit.common.utils.BlockUtil;
 import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.utils.EntityUtil;
@@ -61,6 +62,7 @@ import com.bergerkiller.bukkit.tc.attachments.animation.AnimationOptions;
 import com.bergerkiller.bukkit.tc.attachments.api.Attachment;
 import com.bergerkiller.bukkit.tc.attachments.config.AttachmentModel;
 import com.bergerkiller.bukkit.tc.attachments.config.AttachmentModelOwner;
+import com.bergerkiller.bukkit.tc.attachments.control.CartAttachmentSeat;
 import com.bergerkiller.bukkit.tc.cache.RailSignCache.TrackedSign;
 import com.bergerkiller.bukkit.tc.controller.components.ActionTrackerMember;
 import com.bergerkiller.bukkit.tc.controller.components.RailPath;
@@ -131,6 +133,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     private Vector lastRailRefreshPosition = null;
     private Vector lastRailRefreshDirection = null;
 	public RealisticSoundLoop sound = null;
+    private List<Entity> enterForced = new ArrayList<Entity>(1);
 
     public static boolean isTrackConnected(MinecartMember<?> m1, MinecartMember<?> m2) {
         // Can the minecart reach the other?
@@ -567,27 +570,61 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
             return false;
         }
 
-        // Turn Minecart position into a 4x4 transform matrix
-        Matrix4x4 transform = new Matrix4x4();
-        transform.translateRotate(entity.getLocation());
-
         // Transform passenger position with it
-        Vector position = this.getPassengerPosition(passenger);
-        transform.transformPoint(position);
-        Block block = entity.getWorld().getBlockAt(position.getBlockX(), position.getBlockY(), position.getBlockZ());
+        Location position = this.getPassengerLocation(passenger);
+        position.setY(position.getY() + 1.0);
+        Block block = position.getBlock();
 
         // Check if suffocating
         return BlockUtil.isSuffocating(block);
     }
 
     /**
-     * Gets the relative position of a passenger of this Minecart
+     * Gets the absolute world coordinates and orientation a passenger exiting this Minecart
+     * will have. If the passenger Entity is not a passenger, then a default exit
+     * offset is assumed.
+     * 
+     * @param passenger
+     * @return passenger eject position
+     */
+    public Location getPassengerEjectLocation(Entity passenger) {
+        MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
+        CartAttachmentSeat seat = (network == null) ? null : network.findSeat(passenger);
+
+        if (seat == null) {
+            // Fallback
+            Location mloc = entity.getLocation();
+            mloc.setYaw(FaceUtil.faceToYaw(getDirection()));
+            mloc.setPitch(0.0f);
+            return MathUtil.move(mloc, getProperties().exitOffset);
+        } else {
+            // Use seat
+            return seat.getEjectPosition(passenger);
+        }
+    }
+
+    /**
+     * Gets the absolute world coordinates and orientation of a passenger of this Minecart.
      * 
      * @param passenger
      * @return passenger position
      */
-    public Vector getPassengerPosition(Entity passenger) {
-        return new Vector(0.0, 1.0, 0.0);
+    public Location getPassengerLocation(Entity passenger) {
+        MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
+        CartAttachmentSeat seat = (network == null) ? null : network.findSeat(passenger);
+
+        if (seat == null) {
+            // Fallback
+            Location mloc = entity.getLocation();
+            mloc.setYaw(FaceUtil.faceToYaw(getDirection()));
+            mloc.setPitch(0.0f);
+            return mloc;
+        } else {
+            // Use seat
+            Matrix4x4 transform = seat.getTransform();
+            Vector pyr = transform.getYawPitchRoll();
+            return transform.toVector().toLocation(entity.getWorld(), (float) pyr.getY(), (float) pyr.getX());
+        }
     }
 
     public boolean isInChunk(Chunk chunk) {
@@ -780,7 +817,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         if (showSmoke) {
             loc.getWorld().playEffect(loc, Effect.SMOKE, 0);
         }
-        WorldUtil.playSound(loc, CommonSounds.EXTINGUISH, 1.0f, 2.0f);
+        WorldUtil.playSound(loc, SoundEffect.EXTINGUISH, 1.0f, 2.0f);
     }
 
     /**
@@ -1197,8 +1234,12 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         return this.directionTo;
     }
 
-    public void invalidateDirection() {
-        this.directionFrom = this.direction = this.directionTo = null;
+    /**
+     * Sets the direction property of this minecart to the forward orientation
+     */
+    public void setDirectionForward() {
+        this.directionFrom = this.directionTo = null;
+        this.direction = Util.vecToFace(this.getOrientationForward(), true);
     }
 
     public int getDirectionDifference(BlockFace dircomparer) {
@@ -1213,8 +1254,16 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         RailTrackerMember tracker = this.getRailTracker();
 
         // Direction is simply the motion vector on the rail, turned into a BlockFace
+        // Remember the original direction (flip it) when the train is not moving
         RailState state = tracker.getState();
-        this.direction = state.position().getMotionFaceWithSubCardinal();
+        if (this.direction == null ||
+            this.entity.vel.lengthSquared() > 1e-10 ||
+            state.position().motDot(this.direction) >= 0.0)
+        {
+            this.direction = state.position().getMotionFaceWithSubCardinal();
+        } else {
+            this.direction = state.position().getMotionFaceWithSubCardinal().getOppositeFace();
+        }
 
         // TO direction is simply the enter face in the opposite direction
         RailState state_inv = state.clone();
@@ -1349,6 +1398,72 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
             this.getGroup().stop();
         }
         return true;
+    }
+
+    // Since BKCommonLib 1.15.2-v4: custom bump code
+    // This prevents the player bumping the cart sideways, causing the
+    // rail physics to think the minecart is taking a curve
+    public void onEntityBump(org.bukkit.entity.Entity e) {
+        // Note: required, is in original implementation also
+        VehicleEntityCollisionEvent collisionEvent = new VehicleEntityCollisionEvent(entity.getEntity(), e);
+        if (CommonUtil.callEvent(collisionEvent).isCancelled()) {
+            return;
+        }
+
+        // When bumping with other minecarts we should technically do the whole vanilla train mechanic
+        // Instead for simplicity's sake we're executing fairly vanilla behavior
+        if (e instanceof Minecart) {
+            Vector pos_diff = e.getLocation().subtract(entity.getLocation()).toVector();
+            double len_sq = pos_diff.lengthSquared();
+            if (len_sq >= 1.0e-4) {
+                double n = MathUtil.getNormalizationFactorLS(len_sq);
+                pos_diff.multiply(n);
+                if (n > 1.0) {
+                    n = 1.0;
+                }
+                pos_diff.multiply(0.05 * n);
+                applyBump(e, pos_diff);
+                applyBump(entity.getEntity(), pos_diff.multiply(-1.0));
+            }
+
+            return;
+        }
+
+        Vector pos_diff = e.getLocation().subtract(entity.getLocation()).toVector();
+        if (this.isDerailed()) {
+            pos_diff.setY(0.0);
+        }
+        double len_sq = pos_diff.lengthSquared();
+        if (len_sq >= 1.0e-4) {
+            double n = MathUtil.getNormalizationFactorLS(len_sq);
+            pos_diff.multiply(n);
+            if (n > 1.0) {
+                n = 1.0;
+            }
+            pos_diff.multiply(0.05 * n);
+
+            // Apply minor pushback to the entity pushing the minecart
+            applyBump(e, pos_diff.clone().multiply(0.25));
+
+            pos_diff.multiply(-1.0);
+            if (!this.isDerailed()) {
+                // When railed, the bump vector must be aligned with the current movement vector
+                // Invert movement vector based on what direction the player is pushing
+                Vector railMot = this.getRailTracker().getRail().state.motionVector().normalize();
+                if (railMot.dot(pos_diff) < 0.0) {
+                    railMot.multiply(-1.0);
+                }
+                pos_diff = railMot.multiply(pos_diff.multiply(railMot).length());
+            }
+            applyBump(entity.getEntity(), pos_diff);
+        }
+    }
+
+    private static void applyBump(Entity entity, Vector v) {
+        // Impulse()
+        EntityHandle eh = EntityHandle.fromBukkit(entity);
+        eh.setMot(eh.getMotX() + v.getX(), eh.getMotY() + v.getY(), eh.getMotZ() + v.getZ());
+        eh.setPositionChanged(true);
     }
 
     @Override
@@ -1525,6 +1640,32 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
             }
             TCListener.exemptFromEjectOffset.removeAll(oldPassengers);
         }
+    }
+
+    /**
+     * Puts a passenger inside a seat of this Minecart Member, ignoring enter rules or permissions.
+     * 
+     * @param passenger
+     * @return True if the passenger was added
+     */
+    public boolean addPassengerForced(Entity passenger) {
+        try {
+            this.enterForced.add(passenger);
+            return this.entity.addPassenger(passenger);
+        } finally {
+            this.enterForced.remove(passenger);
+        }
+    }
+
+    /**
+     * Gets whether a passenger being added to this Minecart was forced.
+     * Internal use only.
+     * 
+     * @param entity
+     * @return True if forced
+     */
+    public boolean isPassengerEnterForced(Entity entity) {
+        return this.enterForced.contains(entity);
     }
 
     public boolean connect(MinecartMember<?> with) {
@@ -1745,9 +1886,6 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
         // Update the entity shape
         entity.setPosition(entity.loc.getX(), entity.loc.getY(), entity.loc.getZ());
-
-        // Perform any pre-movement rail updates
-        getRailType().onPreMove(this);
     }
 
     /**
@@ -2137,30 +2275,16 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * 
      * @return number of available seats
      */
-    public int getAvailableSeatCount() {
-        int total = this.getSeatCount();
-        int passengers = entity.getPassengers().size();
-        if (passengers >= total) {
-            return 0;
-        } else {
-            return total - passengers;
+    public int getAvailableSeatCount(Entity passenger) {
+        MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
+        if (network == null) {
+            // Assume a single passenger slot, no special rules
+            return (entity.getType() == EntityType.MINECART && !entity.hasPassenger()) ? 1 : 0;
         }
-    }
 
-    /**
-     * Gets the number of seats available in this Minecart. This is based on the
-     * model attachments applied if a model is used. Otherwise, it simply returns 1
-     * when this is a rideable minecart.
-     * 
-     * @return seat count
-     */
-    public int getSeatCount() {
-        AttachmentModel model = this.getProperties().getModel();
-        if (model == null) {
-            return (entity.getType() == EntityType.MINECART) ? 1 : 0;
-        } else {
-            return model.getSeatCount();
-        }
+        // Ask the network controller about available seats. Make sure to sync passengers first.
+        network.syncPassengers();
+        return network.getAvailableSeatCount(passenger);
     }
 
     /**
