@@ -6,6 +6,7 @@ import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
 import com.bergerkiller.bukkit.tc.events.SignChangeActionEvent;
+import com.bergerkiller.bukkit.tc.utils.SignBuildOptions;
 
 public class SignActionVariableText extends SignAction {
 
@@ -39,14 +40,12 @@ public class SignActionVariableText extends SignAction {
 
     @Override
     public boolean build(SignChangeActionEvent event) {
-        if (event.isCartSign()) {
-            return false;
-        } else if (event.isTrainSign()) {
-            return handleBuild(event, Permission.BUILD_FLIPPER, "train setvtext", "make text attachments variable");
-        } else if (event.isRCSign()) {
-            return handleBuild(event, Permission.BUILD_FLIPPER, "train setvtext", "make text attachments variable remotely");
-        }
-        return false;
+        return SignBuildOptions.create()
+                .setPermission(Permission.BUILD_FLIPPER)
+                .setName("hologram changer")
+                .setDescription("make text attachments to variable")
+                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs")
+                .handle(event.getPlayer());
     }
 
     @Override
