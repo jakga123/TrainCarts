@@ -222,13 +222,13 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
             if (GroupLinkEvent.call(g1, g2).isCancelled()) return false;
 
             //Transfer properties if needed
-            if (g1.size() > g2.size() || g1.getTicksLived() > g2.getTicksLived() || g1.isManualMovement) {
+            if (g1.size() > g2.size() || (g1.size() == g2.size() && g1.getTicksLived() > g2.getTicksLived()) || g1.isManualMovement) {
     	        // Transfer properties
     	        g2.getProperties().load(g1.getProperties());
     	        // Transfer name, assigning a random name to the removed properties
     	        String name = g1.getProperties().getTrainName();
-    	        g1.getProperties().setName(TrainProperties.generateTrainName());
-    	        g2.getProperties().setName(name);
+    	        g1.getProperties().setTrainName(TrainProperties.generateTrainName());
+    	        g2.getProperties().setTrainName(name);
     			if (g1.isManualMovement) {
     	            g2.lctManual = new LCTManual(g2, g1.lctManual.pilot);
     	        }
