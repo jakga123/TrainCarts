@@ -4,7 +4,6 @@ import com.bergerkiller.bukkit.common.BlockLocation;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
 import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.utils.LogicUtil;
-import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.tc.Permission;
 import com.bergerkiller.bukkit.tc.RealisticSoundLoop;
 import com.bergerkiller.bukkit.tc.TCConfig;
@@ -14,51 +13,52 @@ import com.bergerkiller.bukkit.tc.attachments.config.AttachmentModel;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.controller.MinecartMemberStore;
+import com.bergerkiller.bukkit.tc.properties.api.IProperty;
+import com.bergerkiller.bukkit.tc.properties.api.IPropertyRegistry;
+import com.bergerkiller.bukkit.tc.properties.api.PropertyParseResult;
+import com.bergerkiller.bukkit.tc.properties.standard.StandardProperties;
+import com.bergerkiller.bukkit.tc.properties.standard.fieldbacked.FieldBackedStandardCartProperty;
+import com.bergerkiller.bukkit.tc.properties.standard.type.ExitOffset;
+import com.bergerkiller.bukkit.tc.properties.standard.type.SignSkipOptions;
 import com.bergerkiller.bukkit.tc.storage.OfflineGroupManager;
 import com.bergerkiller.bukkit.tc.storage.OfflineMember;
-import com.bergerkiller.bukkit.tc.utils.SignSkipOptions;
 import com.bergerkiller.bukkit.tc.utils.SoftReference;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.util.Vector;
 
 import java.util.*;
 
 public class CartProperties extends CartPropertiesStore implements IProperties {
-    public static final CartProperties EMPTY = new CartProperties(UUID.randomUUID(), null);
-
-    private final UUID uuid;
-    private final Set<String> owners = new HashSet<>();
-    private final Set<String> ownerPermissions = new HashSet<>();
-    private final Set<String> tags = new HashSet<>();
-    private final Set<Material> blockBreakTypes = new HashSet<>();
-    public Vector exitOffset = new Vector(0.0, 0.0, 0.0);
-    public float exitYaw = 0.0f, exitPitch = 0.0f;
-    protected TrainProperties group = null;
-    private boolean allowPlayerExit = true;
-    private boolean allowPlayerEnter = true;
-    private boolean invincible = false;
-    private String enterMessage = null;
-    private String destination = "";
-    private String lastPathNode = "";
-    private List<String> destinationRoute = Collections.emptyList();
-    private int destinationRouteIndex = 0;
-    private boolean isPublic = true;
-    private boolean pickUp = false;
-    private boolean spawnItemDrops = true;
     private SoftReference<MinecartMember<?>> member = new SoftReference<>();
-    private SignSkipOptions skipOptions = new SignSkipOptions();
-    private AttachmentModel model = null;
-    private String driveSound = "";
+    protected TrainProperties group = null;
+    private final FieldBackedStandardCartProperty.CartInternalDataHolder standardProperties = new FieldBackedStandardCartProperty.CartInternalDataHolder();
+    private ConfigurationNode config;
+    private final UUID uuid;
 
-    protected CartProperties(UUID uuid, TrainProperties group) {
+    protected CartProperties(TrainProperties group, ConfigurationNode config, UUID uuid) {
         this.uuid = uuid;
         this.group = group;
+        this.config = config;
+    }
+
+    /**
+     * Called when the CartProperties were already created but need to be re-created.
+     * Expects the caller to eventually loadConfiguration() to refresh variables
+     * caching the configuration.
+     * 
+     * @param group
+     * @param config
+     */
+    protected void reassign(TrainProperties group, ConfigurationNode config) {
+        if (this.group != null && this.group != group) {
+            this.group.remove(this);
+        }
+        this.group = group;
+        this.config = config;
     }
 
     public static boolean hasGlobalOwnership(Player player) {
@@ -72,6 +72,28 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
     @Override
     public String getTypeName() {
         return "cart";
+    }
+
+    @Override
+    public final ConfigurationNode getConfig() {
+        return this.config;
+    }
+
+    @Override
+    public final <T> T get(IProperty<T> property) {
+        return property.get(this);
+    }
+
+    @Override
+    public final <T> void set(IProperty<T> property, T value) {
+        property.set(this, value);
+    }
+
+    /**
+     * Internal use only
+     */
+    public FieldBackedStandardCartProperty.CartInternalDataHolder getStandardPropertiesHolder() {
+        return standardProperties;
     }
 
     /**
@@ -157,7 +179,8 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * Block obtaining
      */
     public boolean canBreak(Block block) {
-        return !this.blockBreakTypes.isEmpty() && this.blockBreakTypes.contains(block.getType());
+        Set<Material> types = get(StandardProperties.BLOCK_BREAK_TYPES);
+        return !types.isEmpty() && types.contains(block.getType());
     }
 
     /*
@@ -178,23 +201,28 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
 
     @Override
     public boolean isOwner(Player player) {
-        return this.isOwner(player.getName().toLowerCase());
+        return this.isOwner(player.getName());
     }
 
     public boolean isOwner(String player) {
-        return this.owners.contains(player.toLowerCase());
+        return get(StandardProperties.OWNERS).contains(player.toLowerCase());
     }
 
     public void setOwner(String player) {
         this.setOwner(player, true);
     }
 
-    public void setOwner(String player, boolean owner) {
-        if (owner) {
-            this.owners.add(player);
-        } else {
-            this.owners.remove(player);
-        }
+    public void setOwner(final String player, final boolean owner) {
+        update(StandardProperties.OWNERS, curr_owners -> {
+            String player_lc = player.toLowerCase();
+            if (curr_owners.contains(player_lc) == owner) {
+                return curr_owners;
+            } else {
+                HashSet<String> new_owners = new HashSet<>(curr_owners);
+                LogicUtil.addOrRemove(new_owners, player_lc, owner);
+                return new_owners;
+            }
+        });
     }
 
     public void setOwner(Player player) {
@@ -205,7 +233,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
         if (player == null) {
             return;
         }
-        this.setOwner(player.getName().toLowerCase(), owner);
+        this.setOwner(player.getName(), owner);
     }
 
     @Override
@@ -215,41 +243,76 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
 
     @Override
     public Set<String> getOwnerPermissions() {
-        return this.ownerPermissions;
+        return get(StandardProperties.OWNER_PERMISSIONS);
+    }
+
+    public void addOwnerPermission(final String permission) {
+        update(StandardProperties.OWNER_PERMISSIONS, curr_perms -> {
+            if (curr_perms.contains(permission)) {
+                return curr_perms;
+            } else {
+                HashSet<String> new_perms = new HashSet<>(curr_perms);
+                new_perms.add(permission);
+                return new_perms;
+            }
+        });
+    }
+
+    public void removeOwnerPermission(final String permission) {
+        update(StandardProperties.OWNER_PERMISSIONS, curr_perms -> {
+            if (!curr_perms.contains(permission)) {
+                return curr_perms;
+            } else {
+                HashSet<String> new_perms = new HashSet<>(curr_perms);
+                new_perms.remove(permission);
+                return new_perms;
+            }
+        });
     }
 
     @Override
     public void clearOwnerPermissions() {
-        this.ownerPermissions.clear();
+        set(StandardProperties.OWNER_PERMISSIONS, Collections.emptySet());
     }
 
     @Override
     public boolean hasOwnerPermissions() {
-        return !this.ownerPermissions.isEmpty();
+        return !get(StandardProperties.OWNER_PERMISSIONS).isEmpty();
     }
 
     @Override
     public Set<String> getOwners() {
-        return this.owners;
+        return get(StandardProperties.OWNERS);
     }
 
     @Override
     public void clearOwners() {
-        this.owners.clear();
+        set(StandardProperties.OWNERS, Collections.emptySet());
     }
 
     @Override
     public boolean hasOwners() {
-        return !this.owners.isEmpty();
+        return !get(StandardProperties.OWNERS).isEmpty();
     }
 
-    public boolean sharesOwner(CartProperties properties) {
-        if (!this.hasOwners()) return true;
-        if (!properties.hasOwners()) return true;
-        for (String owner : properties.owners) {
-            if (properties.isOwner(owner)) return true;
-        }
-        return false;
+    /**
+     * Gets the relative exit offset players are ejected at when
+     * seat attachments don't define one.
+     * 
+     * @return relative exit offset
+     */
+    public ExitOffset getExitOffset() {
+        return get(StandardProperties.EXIT_OFFSET);
+    }
+
+    /**
+     * Sets the relative exit offset players are ejected at when
+     * seat attachments don't define one.
+     * 
+     * @param new_offset New offset to set to
+     */
+    public void setExitOffset(ExitOffset new_offset) {
+        set(StandardProperties.EXIT_OFFSET, new_offset);
     }
 
     /**
@@ -258,69 +321,74 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @return True if it can pick up items, False if not
      */
     public boolean canPickup() {
-        return this.pickUp;
+        return get(StandardProperties.PICK_UP_ITEMS);
     }
 
     public void setPickup(boolean pickup) {
-        this.pickUp = pickup;
+        set(StandardProperties.PICK_UP_ITEMS, pickup);
     }
 
     @Override
-    public boolean isPublic() {
-        return this.isPublic;
+    public boolean getCanOnlyOwnersEnter() {
+        return get(StandardProperties.ONLY_OWNERS_CAN_ENTER);
     }
 
     @Override
-    public void setPublic(boolean state) {
-        this.isPublic = state;
+    public void setCanOnlyOwnersEnter(boolean state) {
+        set(StandardProperties.ONLY_OWNERS_CAN_ENTER, state);
     }
 
     @Override
     public boolean matchTag(String tag) {
-        return Util.matchText(this.tags, tag);
+        return Util.matchText(this.getTags(), tag);
     }
 
     @Override
     public boolean hasTags() {
-        return !this.tags.isEmpty();
+        return !this.getTags().isEmpty();
     }
 
     @Override
     public void clearTags() {
-        this.tags.clear();
+        set(StandardProperties.TAGS, Collections.emptySet());
     }
 
     @Override
-    public void addTags(String... tags) {
-        Collections.addAll(this.tags, tags);
+    public void addTags(final String... tags) {
+        update(StandardProperties.TAGS, curr_tags -> {
+            HashSet<String> new_tags = new HashSet<String>(curr_tags);
+            new_tags.addAll(Arrays.asList(tags));
+            return new_tags;
+        });
     }
 
     @Override
-    public void removeTags(String... tags) {
-        for (String tag : tags) {
-            this.tags.remove(tag);
-        }
+    public void removeTags(final String... tags) {
+        update(StandardProperties.TAGS, curr_tags -> {
+            HashSet<String> new_tags = new HashSet<String>(curr_tags);
+            new_tags.removeAll(Arrays.asList(tags));
+            return new_tags;
+        });
     }
 
     @Override
     public Set<String> getTags() {
-        return this.tags;
+        return get(StandardProperties.TAGS);
     }
 
     @Override
     public void setTags(String... tags) {
-        this.tags.clear();
-        this.addTags(tags);
+        set(StandardProperties.TAGS, new HashSet<String>(Arrays.asList(tags)));
     }
 
     @Override
     public boolean getSpawnItemDrops() {
-        return this.spawnItemDrops;
+        return get(StandardProperties.SPAWN_ITEM_DROPS);
     }
 
     @Override
     public void setSpawnItemDrops(boolean spawnDrops) {
-        this.spawnItemDrops = spawnDrops;
+        set(StandardProperties.SPAWN_ITEM_DROPS, spawnDrops);
     }
 
     @Override
@@ -351,14 +419,14 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @return True if materials are contained, False if not
      */
     public boolean hasBlockBreakTypes() {
-        return !this.blockBreakTypes.isEmpty();
+        return !get(StandardProperties.BLOCK_BREAK_TYPES).isEmpty();
     }
 
     /**
      * Clears all the materials this Minecart can break
      */
     public void clearBlockBreakTypes() {
-        this.blockBreakTypes.clear();
+        set(StandardProperties.BLOCK_BREAK_TYPES, Collections.emptySet());
     }
 
     /**
@@ -367,7 +435,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @return a Collection of blocks that are broken
      */
     public Collection<Material> getBlockBreakTypes() {
-        return this.blockBreakTypes;
+        return get(StandardProperties.BLOCK_BREAK_TYPES);
     }
 
     /**
@@ -376,12 +444,12 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @return Enter message
      */
     public String getEnterMessage() {
-        return this.enterMessage;
+        return get(StandardProperties.ENTER_MESSAGE);
     }
 
     @Override
     public void setEnterMessage(String message) {
-        this.enterMessage = message;
+        set(StandardProperties.ENTER_MESSAGE, message);
     }
 
     /**
@@ -390,7 +458,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @return True if a message is set, False if not
      */
     public boolean hasEnterMessage() {
-        return this.enterMessage != null && !this.enterMessage.equals("");
+        return !get(StandardProperties.ENTER_MESSAGE).isEmpty();
     }
 
     /**
@@ -399,151 +467,131 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @param player to display the message to
      */
     public void showEnterMessage(Player player) {
-        if (this.hasEnterMessage()) {
-            TrainCarts.sendMessage(player, ChatColor.YELLOW + TrainCarts.getMessage(enterMessage));
+        String message = this.getEnterMessage();
+        if (!message.isEmpty()) {
+            TrainCarts.sendMessage(player, ChatColor.YELLOW + TrainCarts.getMessage(message));
         }
     }
 
     public void clearDestination() {
-        this.setDestination("");
+        set(StandardProperties.DESTINATION, "");
     }
 
     @Override
     public boolean hasDestination() {
-        return !this.destination.isEmpty();
+        return !get(StandardProperties.DESTINATION).isEmpty();
     }
 
     @Override
     public String getDestination() {
-        return this.destination;
+        return get(StandardProperties.DESTINATION);
     }
 
     @Override
     public void setDestination(String destination) {
-        // Save current index before the destination was changed
-        int prior_route_index = this.getCurrentRouteDestinationIndex();
-
-        // Update destination
-        this.destination = destination == null ? "" : destination;
-
-        // If a destination is now set, increment the route index if it matches the next one in the list
-        if (this.hasDestination() && prior_route_index != -1) {
-            int nextIndex = (prior_route_index + 1) % this.destinationRoute.size();
-            if (this.getDestination().equals(this.destinationRoute.get(nextIndex))) {
-                this.destinationRouteIndex = nextIndex;
-            }
-        }
+        set(StandardProperties.DESTINATION, destination);
     }
 
     @Override
     public List<String> getDestinationRoute() {
-        return this.destinationRoute;
+        return get(StandardProperties.DESTINATION_ROUTE);
     }
 
     @Override
     public void setDestinationRoute(List<String> route) {
-        if (route.isEmpty()) {
-            this.clearDestinationRoute();
-        } else {
-            this.destinationRoute = new ArrayList<String>(route);
-
-            // Keep routing towards the same destination
-            // This allows for a seamless transition between routes
-            if (this.hasDestination()) {
-                this.destinationRouteIndex = this.destinationRoute.indexOf(this.getDestination());
-                if (this.destinationRouteIndex == -1) {
-                    this.destinationRouteIndex = 0;
-                }
-            } else {
-                this.destinationRouteIndex = 0;
-            }
-        }
+        set(StandardProperties.DESTINATION_ROUTE, route);
     }
 
     @Override
     public void clearDestinationRoute() {
-        this.destinationRoute = Collections.emptyList();
-        this.destinationRouteIndex = 0;
+        set(StandardProperties.DESTINATION_ROUTE, Collections.emptyList());
     }
 
     @Override
-    public void addDestinationToRoute(String destination) {
-        if (destination == null || destination.isEmpty()) {
-            return;
+    public void addDestinationToRoute(final String destination) {
+        if (destination != null && !destination.isEmpty()) {
+            update(StandardProperties.DESTINATION_ROUTE, curr_route -> {
+                ArrayList<String> new_route = new ArrayList<String>(curr_route);
+                new_route.add(destination);
+                return new_route;
+            });
         }
-        if (this.destinationRoute.isEmpty()) {
-            this.destinationRoute = new ArrayList<String>(2);
-        }
-        this.destinationRoute.add(destination);
     }
 
     @Override
-    public void removeDestinationFromRoute(String destination) {
-        if (destination == null || destination.isEmpty() || this.destinationRoute.isEmpty()) {
-            return;
-        }
-        for (int index; this.destinationRoute.size() > 1 && (index = this.destinationRoute.indexOf(destination)) != -1;) {
-            this.destinationRoute.remove(index);
-        }
-        if (this.destinationRoute.size() == 1 && destination.equals(this.destinationRoute.get(0))) {
-            this.clearDestinationRoute();
+    public void removeDestinationFromRoute(final String destination) {
+        if (destination != null && !destination.isEmpty()) {
+            update(StandardProperties.DESTINATION_ROUTE, curr_route -> {
+                ArrayList<String> new_route = new ArrayList<String>(curr_route);
+                while (new_route.remove(destination)); // remove all instances
+                return new_route;
+            });
         }
     }
 
     @Override
     public int getCurrentRouteDestinationIndex() {
-        if (this.destinationRoute.isEmpty() || !this.hasDestination()) {
+        List<String> destinationRoute = this.getDestinationRoute();
+        String destination = this.getDestination();
+        if (destinationRoute.isEmpty() || destination.isEmpty()) {
             return -1;
-        } else if (this.destinationRouteIndex < 0 || this.destinationRouteIndex >= this.destinationRoute.size()) {
-            return this.destinationRoute.indexOf(this.getDestination());
-        } else if (this.getDestination().equals(this.destinationRoute.get(this.destinationRouteIndex))) {
-            return this.destinationRouteIndex;
+        }
+
+        int destinationRouteIndex = get(StandardProperties.DESTINATION_ROUTE_INDEX);
+        if (destinationRouteIndex < 0 || destinationRouteIndex >= destinationRoute.size()) {
+            return destinationRoute.indexOf(destination);
+        } else if (destination.equals(destinationRoute.get(destinationRouteIndex))) {
+            return destinationRouteIndex;
         } else {
-            return this.destinationRoute.indexOf(this.getDestination());
+            return destinationRoute.indexOf(destination);
         }
     }
 
     @Override
     public String getNextDestinationOnRoute() {
-        if (this.destinationRoute.isEmpty()) {
+        List<String> destinationRoute = this.getDestinationRoute();
+        if (destinationRoute.isEmpty()) {
             return "";
         }
 
         // Correct out of bounds route index
-        if (this.destinationRouteIndex < 0 || this.destinationRouteIndex >= this.destinationRoute.size()) {
-            this.destinationRouteIndex = 0;
+        int destinationRouteIndex = get(StandardProperties.DESTINATION_ROUTE_INDEX);
+        if (destinationRouteIndex < 0 || destinationRouteIndex >= destinationRoute.size()) {
+            set(StandardProperties.DESTINATION_ROUTE_INDEX, 0);
+            destinationRouteIndex = 0;
         }
 
         // If no destination is set, then we go to whatever index we were last at
         // By default this is 0 (start of the route)
-        if (!this.hasDestination()) {
-            return this.destinationRoute.get(this.destinationRouteIndex);
+        String destination = this.getDestination();
+        if (destination.isEmpty()) {
+            return destinationRoute.get(destinationRouteIndex);
         }
 
         int index;
-        if (this.getDestination().equals(this.destinationRoute.get(this.destinationRouteIndex))) {
+        if (destination.equals(destinationRoute.get(destinationRouteIndex))) {
             // If current destination matches the current route at the index, pick next one in the list
-            index = this.destinationRouteIndex;
+            index = destinationRouteIndex;
         } else {
             // Index is wrong / out of order destination, pick first one that matches
-            index = this.destinationRoute.indexOf(this.getDestination());
+            index = destinationRoute.indexOf(destination);
             if (index == -1) {
                 return ""; // it's not on the route!
             }
         }
 
         // Next one (loop back to beginning)
-        return this.destinationRoute.get((index + 1) % this.destinationRoute.size());
+        return destinationRoute.get((index + 1) % destinationRoute.size());
     }
 
     @Override
     public String getLastPathNode() {
-        return this.lastPathNode;
+        return get(StandardProperties.DESTINATION_LAST_PATH_NODE);
     }
 
     @Override
     public void setLastPathNode(String nodeName) {
-        this.lastPathNode = nodeName;
+        set(StandardProperties.DESTINATION_LAST_PATH_NODE, nodeName);
     }
 
     /**
@@ -554,23 +602,14 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @return model set, null for Vanilla
      */
     public AttachmentModel getModel() {
-        if (this.model == null) {
-            // No model was set. Create a Vanilla model based on the Minecart information
-            MinecartMember<?> member = this.getHolder();
-            EntityType minecartType = (member == null) ? EntityType.MINECART : member.getEntity().getType();
-            this.model = AttachmentModel.getDefaultModel(minecartType);
-        }
-        return this.model;
+        return get(StandardProperties.MODEL);
     }
 
     /**
      * Resets any set model, restoring the Minecart to its Vanilla defaults.
      */
     public void resetModel() {
-        if (this.model != null) {
-            MinecartMember<?> member = this.getHolder();
-            this.model.resetToDefaults((member == null) ? EntityType.MINECART : member.getEntity().getType());
-        }
+        set(StandardProperties.MODEL, null);
     }
 
     /**
@@ -581,265 +620,64 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @param modelName
      */
     public void setModelName(String modelName) {
-        if (this.model == null) {
-            this.model = new AttachmentModel();
-        }
-        this.model.resetToName(modelName);
+        AttachmentModel model = new AttachmentModel();
+        model.resetToName(modelName);
+        set(StandardProperties.MODEL, model);
     }
 
     @Override
     public boolean parseSet(String key, String arg) {
-        TrainPropertiesStore.markForAutosave();
-        if (key.equalsIgnoreCase("exitoffset")) {
-            Vector vec = Util.parseVector(arg, null);
-            if (vec != null) {
-                if (vec.length() > TCConfig.maxEjectDistance) {
-                    vec.normalize().multiply(TCConfig.maxEjectDistance);
-                }
-                exitOffset = vec;
-            }
-        } else if (key.equalsIgnoreCase("exityaw")) {
-            exitYaw = ParseUtil.parseFloat(arg, 0.0f);
-        } else if (key.equalsIgnoreCase("exitpitch")) {
-            exitPitch = ParseUtil.parseFloat(arg, 0.0f);
-        } else if (LogicUtil.containsIgnoreCase(key, "exitrot", "exitrotation")) {
-            String[] angletext = Util.splitBySeparator(arg);
-            float yaw = 0.0f;
-            float pitch = 0.0f;
-            if (angletext.length == 2) {
-                yaw = ParseUtil.parseFloat(angletext[0], 0.0f);
-                pitch = ParseUtil.parseFloat(angletext[1], 0.0f);
-            } else if (angletext.length == 1) {
-                yaw = ParseUtil.parseFloat(angletext[0], 0.0f);
-            }
-            exitYaw = yaw;
-            exitPitch = pitch;
-        } else if (key.equalsIgnoreCase("addtag")) {
-            this.addTags(arg);
-        } else if (key.equalsIgnoreCase("settag")) {
-            this.setTags(arg);
-        } else if (LogicUtil.containsIgnoreCase(key, "remtag", "removetag")) {
-            this.removeTags(arg);
-        } else if (key.equalsIgnoreCase("destination")) {
-            this.setDestination(arg);
-        } else if (key.equalsIgnoreCase("addroute")) {
-            this.addDestinationToRoute(arg);
-        } else if (LogicUtil.containsIgnoreCase(key, "remroute", "removeroute")) {
-            this.removeDestinationFromRoute(arg);
-        } else if (key.equalsIgnoreCase("clearroute")) {
-            this.clearDestinationRoute();
-        } else if (key.equalsIgnoreCase("setroute")) {
-            this.clearDestinationRoute();
-            this.addDestinationToRoute(arg);
-        } else if (key.equalsIgnoreCase("loadroute")) {
-            this.setDestinationRoute(TrainCarts.plugin.getRouteManager().findRoute(arg));
-        } else if (key.equalsIgnoreCase("playerenter")) {
-            this.setPlayersEnter(ParseUtil.parseBool(arg));
-        } else if (key.equalsIgnoreCase("playerexit")) {
-            this.setPlayersExit(ParseUtil.parseBool(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "invincible", "godmode")) {
-            this.setInvincible(ParseUtil.parseBool(arg));
-        } else if (key.equalsIgnoreCase("setownerperm")) {
-            this.clearOwnerPermissions();
-            this.getOwnerPermissions().add(arg);
-        } else if (key.equalsIgnoreCase("addownerperm")) {
-            this.getOwnerPermissions().add(arg);
-        } else if (key.equalsIgnoreCase("remownerperm")) {
-            this.getOwnerPermissions().remove(arg);
-        } else if (key.equalsIgnoreCase("setowner")) {
-            arg = arg.toLowerCase();
-            this.setOwner(arg);
-        } else if (key.equalsIgnoreCase("addowner")) {
-            arg = arg.toLowerCase();
-            this.getOwners().add(arg);
-        } else if (key.equalsIgnoreCase("remowner")) {
-            arg = arg.toLowerCase();
-            this.getOwners().remove(arg);
-        } else if (key.equalsIgnoreCase("model")) {
-            setModelName(arg);
-        } else if (LogicUtil.containsIgnoreCase(key, "clearmodel", "resetmodel")) {
-            resetModel();
-        } else if (LogicUtil.containsIgnoreCase(key, "spawnitemdrops", "spawndrops", "killdrops")) {
-            this.setSpawnItemDrops(ParseUtil.parseBool(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "drivesound", "driveeffect")) {
-            this.setDriveSound(arg);
-        } else {
-            return false;
-        }
-        this.tryUpdate();
-        return true;
+        // Legacy
+        return parseAndSet(key, arg).getReason() != PropertyParseResult.Reason.PROPERTY_NOT_FOUND;
     }
 
     /**
-     * Loads the information from the properties specified
+     * Loads the properties from the CartProperties source specified<br>
+     * This is used when duplicating a cart to a new unique entity.
      *
-     * @param from to load from
+     * @param source to load from
+     * @see #load(ConfigurationNode)
      */
-    public void load(CartProperties from) {
-        this.destination = from.destination;
-        this.destinationRoute = (from.destinationRoute.isEmpty()) ?
-                Collections.emptyList() : new ArrayList<String>(from.destinationRoute);
-        this.destinationRouteIndex = from.destinationRouteIndex;
-        this.owners.clear();
-        this.owners.addAll(from.owners);
-        this.ownerPermissions.clear();
-        this.ownerPermissions.addAll(from.ownerPermissions);
-        this.tags.clear();
-        this.tags.addAll(from.tags);
-        this.blockBreakTypes.clear();
-        this.blockBreakTypes.addAll(from.blockBreakTypes);
-        this.enterMessage = from.enterMessage;
-        this.skipOptions.load(from.skipOptions, true);
-        this.allowPlayerEnter = from.allowPlayerEnter;
-        this.allowPlayerExit = from.allowPlayerExit;
-        this.invincible = from.invincible;
-        this.exitOffset = from.exitOffset.clone();
-        this.exitYaw = from.exitYaw;
-        this.exitPitch = from.exitPitch;
-        this.spawnItemDrops = from.spawnItemDrops;
-        this.driveSound = from.driveSound;
-        this.model = (from.model == null) ? null : from.model.clone();
+    public void load(CartProperties source) {
+        this.load(source.saveToConfig());
     }
 
     @Override
     public void load(ConfigurationNode node) {
-        this.destination = node.get("destination", this.destination);
-        this.lastPathNode = node.get("lastPathNode", this.lastPathNode);
-        this.allowPlayerEnter = node.get("allowPlayerEnter", this.allowPlayerEnter);
-        this.allowPlayerExit = node.get("allowPlayerExit", this.allowPlayerExit);
-        this.invincible = node.get("invincible", this.invincible);
-        this.isPublic = node.get("isPublic", this.isPublic);
-        this.pickUp = node.get("pickUp", this.pickUp);
-        this.spawnItemDrops = node.get("spawnItemDrops", this.spawnItemDrops);
-        this.exitOffset = node.get("exitOffset", this.exitOffset);
-        this.exitYaw = node.get("exitYaw", this.exitYaw);
-        this.exitPitch = node.get("exitPitch", this.exitPitch);
-        this.driveSound = node.get("driveSound", this.driveSound);
+        // Wipe all previous configuration
+        this.config.clear();
 
-        this.destinationRouteIndex = node.get("routeIndex", this.destinationRouteIndex);
-        if (node.contains("route")) {
-            List<String> route = node.getList("route", String.class);
-            if (route.isEmpty()) {
-                this.destinationRoute = Collections.emptyList();
-            } else {
-                this.destinationRoute = new ArrayList<String>(route);
-            }
-        }
-        if (node.contains("owners")) {
-            this.owners.clear();
-            for (String owner : node.getList("owners", String.class)) {
-                this.owners.add(owner.toLowerCase());
-            }
-        }
-        if (node.contains("ownerPermissions")) {
-            this.ownerPermissions.clear();
-            this.ownerPermissions.addAll(node.getList("ownerPermissions", String.class));
-        }
-        if (node.contains("tags")) {
-            this.tags.clear();
-            for (String tag : node.getList("tags", String.class)) {
-                this.tags.add(tag);
-            }
-        }
-        if (node.contains("blockBreakTypes")) {
-            this.blockBreakTypes.clear();
-            for (String blocktype : node.getList("blockBreakTypes", String.class)) {
-                Material mat = ParseUtil.parseMaterial(blocktype, null);
-                if (mat != null) {
-                    this.blockBreakTypes.add(mat);
-                }
-            }
-        }
-        if (node.isNode("skipOptions")) {
-            this.skipOptions.load(node.getNode("skipOptions"));
-        }
-        if (node.isNode("model")) {
-            if (this.model != null) {
-                this.model.update(node.getNode("model").clone(), true);
-            } else {
-                this.model = new AttachmentModel(node.getNode("model").clone());
-            }
-        }
-    }
+        // Deep-copy input cart configuration to self cart configuration
+        node.cloneInto(this.config);
 
-    @Override
-    public void saveAsDefault(ConfigurationNode node) {
-        node.set("owners", new ArrayList<>(this.owners));
-        node.set("ownerPermissions", new ArrayList<>(this.ownerPermissions));
-        node.set("tags", new ArrayList<>(this.tags));
-        node.set("allowPlayerEnter", this.allowPlayerEnter);
-        node.set("allowPlayerExit", this.allowPlayerExit);
-        node.set("invincible", this.invincible);
-        node.set("isPublic", this.isPublic);
-        node.set("pickUp", this.pickUp);
-        node.set("exitOffset", this.exitOffset);
-        node.set("exitYaw", this.exitYaw);
-        node.set("exitPitch", this.exitPitch);
-        node.set("driveSound", this.driveSound);
-        List<String> items = node.getList("blockBreakTypes", String.class);
-        items.clear();
-        for (Material mat : this.blockBreakTypes) {
-            items.add(mat.toString());
-        }
-        node.set("destination", this.hasDestination() ? this.destination : "");
-        node.set("route", Collections.emptyList());
-        node.set("enterMessage", this.hasEnterMessage() ? this.enterMessage : "");
-        node.set("spawnItemDrops", this.spawnItemDrops);
-
-        if (this.model != null && !this.model.isDefault()) {
-            node.set("model", this.model.getConfig());
-        } else {
-            node.remove("model");
-        }
+        // Reload properties from YAML
+        onConfigurationChanged();
     }
 
     @Override
     public void save(ConfigurationNode node) {
-        node.set("owners", this.owners.isEmpty() ? null : new ArrayList<>(this.owners));
-        node.set("ownerPermissions", this.ownerPermissions.isEmpty() ? null : new ArrayList<>(this.ownerPermissions));
-        node.set("tags", this.tags.isEmpty() ? null : new ArrayList<>(this.tags));
-        node.set("allowPlayerEnter", this.allowPlayerEnter ? null : false);
-        node.set("allowPlayerExit", this.allowPlayerExit ? null : false);
-        node.set("invincible", this.invincible ? true : null);
-        node.set("isPublic", this.isPublic ? null : false);
-        node.set("pickUp", this.pickUp ? true : null);
-        node.set("exitOffset", this.exitOffset.lengthSquared() == 0.0 ? null : this.exitOffset);
-        node.set("exitYaw", this.exitYaw == 0.0f ? null : this.exitYaw);
-        node.set("exitPitch", this.exitPitch == 0.0f ? null : this.exitPitch);
-        node.set("driveSound", this.driveSound == "" ? null : this.driveSound);
-        if (this.blockBreakTypes.isEmpty()) {
-            node.remove("blockBreakTypes");
-        } else {
-            List<String> items = node.getList("blockBreakTypes", String.class);
-            items.clear();
-            for (Material mat : this.blockBreakTypes) {
-                items.add(mat.toString());
-            }
-        }
-        node.set("destination", this.hasDestination() ? this.destination : null);
-        node.set("lastPathNode", LogicUtil.nullOrEmpty(this.lastPathNode) ? null : this.lastPathNode);
-        node.set("enterMessage", this.hasEnterMessage() ? this.enterMessage : null);
-        node.set("spawnItemDrops", this.spawnItemDrops ? null : false);
+        saveToConfig().cloneInto(node);
+    }
 
-        if (this.destinationRoute.isEmpty()) {
-            node.remove("routeIndex");
-            node.remove("route");
-        } else {
-            node.set("routeIndex", this.destinationRouteIndex == 0 ? null : this.destinationRouteIndex);
-            node.set("route", this.destinationRoute);
+    protected void onConfigurationChanged() {
+        // Refresh registered IProperties
+        // All below should eventually become IProperties, which is when this function
+        // can be removed!
+        for (IProperty<?> property : IPropertyRegistry.instance().all()) {
+            property.onConfigurationChanged(this);
         }
+    }
 
-        if (this.skipOptions.isActive()) {
-            this.skipOptions.save(node.getNode("skipOptions"));
-        } else if (node.contains("skipOptions")) {
-            node.remove("skipOptions");
-        }
-
-        if (this.model != null) {
-            node.set("model", this.model.getConfig());
-        } else {
-            node.remove("model");
-        }
+    /**
+     * Forces all properties to be saved to the {@link #getConfig()}.
+     * Note: this will be removed once all properties are
+     * part of IProperties! Then they are all live-updated and this
+     * method is no longer needed.
+     * 
+     * @return saved {@link #getConfig()}
+     */
+    public ConfigurationNode saveToConfig() {
+        return this.config;
     }
 
     /**
@@ -848,52 +686,63 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * @return True if enabled, False if not
      */
     public boolean isInvincible() {
-        return this.invincible;
+        return get(StandardProperties.INVINCIBLE);
     }
 
     /**
      * Sets wether this Train can be damages
      *
-     * @param enabled state to set to
+     * @param invincible state to set to
      */
-    public void setInvincible(boolean enabled) {
-        this.invincible = enabled;
+    public void setInvincible(boolean invincible) {
+        set(StandardProperties.INVINCIBLE, invincible);
     }
 
     @Override
     public boolean getPlayersEnter() {
-        return this.allowPlayerEnter;
+        return get(StandardProperties.ALLOW_PLAYER_ENTER);
     }
 
     @Override
     public void setPlayersEnter(boolean state) {
-        this.allowPlayerEnter = state;
+        set(StandardProperties.ALLOW_PLAYER_ENTER, state);
     }
 
     @Override
     public boolean getPlayersExit() {
-        return this.allowPlayerExit;
+        return get(StandardProperties.ALLOW_PLAYER_EXIT);
     }
 
     @Override
     public void setPlayersExit(boolean state) {
-        this.allowPlayerExit = state;
+        set(StandardProperties.ALLOW_PLAYER_EXIT, state);
     }
 
     public SignSkipOptions getSkipOptions() {
-        return this.skipOptions;
+        return get(StandardProperties.SIGN_SKIP);
     }
 
     public void setSkipOptions(SignSkipOptions options) {
-        this.skipOptions.load(options, false);
+        // Must preserve the signs!
+        Set<BlockLocation> old_skipped_signs = get(StandardProperties.SIGN_SKIP).skippedSigns();
+        if (old_skipped_signs.equals(options.skippedSigns())) {
+            set(StandardProperties.SIGN_SKIP, options);
+        } else {
+            set(StandardProperties.SIGN_SKIP, SignSkipOptions.create(
+                    options.ignoreCounter(),
+                    options.skipCounter(),
+                    options.filter(),
+                    old_skipped_signs));
+        }
     }
 
     public String getDriveSound() {
-        return driveSound;
+        return get(StandardProperties.DRIVE_SOUND);
     }
 
     public void setDriveSound(String driveSound) {
         this.driveSound = driveSound;
         this.getHolder().settingRSL();
+        //set(StandardProperties.DRIVE_SOUND, driveSound);
     }
 }

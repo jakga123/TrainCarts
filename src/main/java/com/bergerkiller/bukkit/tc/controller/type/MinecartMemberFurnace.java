@@ -7,7 +7,7 @@ import com.bergerkiller.bukkit.common.wrappers.HumanHand;
 import com.bergerkiller.bukkit.common.wrappers.InteractionResult;
 import com.bergerkiller.bukkit.tc.exception.GroupUnloadedException;
 import com.bergerkiller.bukkit.tc.exception.MemberMissingException;
-import com.bergerkiller.bukkit.tc.utils.SlowdownMode;
+import com.bergerkiller.bukkit.tc.properties.standard.type.SlowdownMode;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.controller.components.PoweredCartSoundLoop;
@@ -194,6 +194,7 @@ public class MinecartMemberFurnace extends MinecartMember<CommonMinecartFurnace>
 
     @Override
     public void onTrainSaved(ConfigurationNode data) {
+        super.onTrainSaved(data);
         if (this.getEntity().getFuelTicks() > 0) {
             data.set("fuel", this.entity.getFuelTicks());
         }
@@ -201,6 +202,7 @@ public class MinecartMemberFurnace extends MinecartMember<CommonMinecartFurnace>
 
     @Override
     public void onTrainSpawned(ConfigurationNode data) {
+        super.onTrainSpawned(data);
         if (data.contains("fuel")) {
             this.entity.setFuelTicks(data.get("fuel", 0));
         } else {

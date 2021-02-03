@@ -1,5 +1,6 @@
 package com.bergerkiller.bukkit.tc.properties;
 
+import com.bergerkiller.bukkit.common.config.ConfigurationNode;
 import com.bergerkiller.bukkit.common.map.MapDisplay;
 import com.bergerkiller.bukkit.tc.attachments.ui.AttachmentEditor;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
@@ -20,6 +21,16 @@ import java.util.UUID;
 public class CartPropertiesStore {
     protected static HashMap<UUID, CartProperties> editing = new HashMap<>();
     private static HashMap<UUID, CartProperties> properties = new HashMap<>();
+
+    /**
+     * Gets the cart properties by cart uuid
+     * 
+     * @param uuid
+     * @return cart properties, null if not found
+     */
+    public static CartProperties getByUUID(UUID uuid) {
+        return properties.get(uuid);
+    }
 
     /**
      * Gets the properties of the Minecart the specified player is currently editing
@@ -87,7 +98,7 @@ public class CartPropertiesStore {
                 }
             }
             TrainProperties tprop = prop.getTrainProperties();
-            if (tprop != null && tprop.contains(prop)) {
+            if (tprop != null) {
                 tprop.remove(prop);
             }
 
@@ -114,26 +125,50 @@ public class CartPropertiesStore {
     }
 
     /**
-     * Gets the Cart Properties of the Minecart specified<br>
-     * Constructs a new entry if none is contained.
-     *
-     * @param uuid  of the Minecart
-     * @param train to link the Minecart to if not contained
-     * @return The CartProperties for the Minecart
+     * Creates and initializes new cart properties. If existing properties
+     * exist for the same UUID, it is overwritten.<br>
+     * <br>
+     * <b>Warning: must call onConfigurationChanged() on it at some point, or things break!</b>
+     * 
+     * @param train Train properties that this cart is part of
+     * @param config Cart configuration
+     * @param uuid The UUID of the Minecart
+     * @return new cart properties
      */
-    public static CartProperties get(UUID uuid, TrainProperties train) {
-        return properties.computeIfAbsent(uuid, key -> new CartProperties(key, train));
+    protected static CartProperties createNew(TrainProperties train, ConfigurationNode config, UUID uuid) {
+        CartProperties prop = properties.get(uuid);
+        if (prop != null) {
+            prop.reassign(train, config);
+        } else {
+            prop = new CartProperties(train, config, uuid);
+            properties.put(uuid, prop);
+        }
+        return prop;
     }
 
     /**
-     * Gets the Cart Properties of the Minecart specified
+     * Creates the Cart Properties for the Minecart specified.
+     * If by this UUID some are known, these are returned, otherwise new
+     * properties with default initial values are created.
      *
      * @param member the properties belong to
      * @return the Cart Properties for the Minecart
      */
-    public static CartProperties get(MinecartMember<?> member) {
-        CartProperties props = get(member.getEntity().getUniqueId(), member.isUnloaded() ? null : member.getGroup().getProperties());
-        props.setHolder(member);
-        return props;
+    public static CartProperties createForMember(MinecartMember<?> member) {
+        UUID uuid = member.getEntity().getUniqueId();
+        CartProperties prop = properties.get(uuid);
+        if (prop != null) {
+            prop.setHolder(member);
+            return prop;
+        }
+
+        TrainProperties trainProperties = member.isUnloaded()
+                ? null : member.getGroup().getProperties();
+
+        prop = new CartProperties(trainProperties, new ConfigurationNode(), uuid);
+        properties.put(uuid, prop);
+        prop.setHolder(member);
+        prop.onConfigurationChanged();
+        return prop;
     }
 }

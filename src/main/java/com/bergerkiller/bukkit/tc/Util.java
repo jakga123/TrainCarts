@@ -4,8 +4,13 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.bukkit.Chunk;
@@ -29,10 +34,9 @@ import org.bukkit.material.Stairs;
 import org.bukkit.material.Step;
 import org.bukkit.util.Vector;
 
-import com.bergerkiller.bukkit.common.Common;
 import com.bergerkiller.bukkit.common.MaterialTypeProperty;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
-import com.bergerkiller.bukkit.common.controller.EntityController;
+import com.bergerkiller.bukkit.common.config.yaml.YamlPath;
 import com.bergerkiller.bukkit.common.conversion.Conversion;
 import com.bergerkiller.bukkit.common.inventory.ItemParser;
 import com.bergerkiller.bukkit.common.math.Quaternion;
@@ -48,22 +52,20 @@ import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.common.utils.PlayerUtil;
 import com.bergerkiller.bukkit.common.utils.StringUtil;
 import com.bergerkiller.bukkit.common.utils.WorldUtil;
+import com.bergerkiller.bukkit.common.utils.LogicUtil.ItemSynchronizer;
 import com.bergerkiller.bukkit.common.wrappers.BlockData;
 import com.bergerkiller.bukkit.tc.cache.RailSignCache;
 import com.bergerkiller.bukkit.tc.controller.components.RailJunction;
 import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
 import com.bergerkiller.bukkit.tc.controller.components.RailState;
-import com.bergerkiller.bukkit.tc.properties.IParsable;
-import com.bergerkiller.bukkit.tc.properties.IProperties;
-import com.bergerkiller.bukkit.tc.properties.IPropertiesHolder;
 import com.bergerkiller.bukkit.tc.rails.type.RailType;
 import com.bergerkiller.bukkit.tc.utils.AveragedItemParser;
+import com.bergerkiller.bukkit.tc.utils.FormattedSpeed;
 import com.bergerkiller.bukkit.tc.utils.TrackMovingPoint;
 import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
 import com.bergerkiller.generated.net.minecraft.server.AxisAlignedBBHandle;
 import com.bergerkiller.generated.net.minecraft.server.ChunkHandle;
 import com.bergerkiller.generated.net.minecraft.server.EntityTrackerEntryHandle;
-import com.bergerkiller.mountiplex.reflection.util.FastMethod;
 import com.bergerkiller.reflection.net.minecraft.server.NMSItem;
 
 public class Util {
@@ -640,26 +642,144 @@ public class Util {
         return offset;
     }
 
-    public static boolean parseProperties(IParsable properties, String key, String args) {
-        IProperties prop;
-        IPropertiesHolder holder;
-        if (properties instanceof IPropertiesHolder) {
-            holder = ((IPropertiesHolder) properties);
-            prop = holder.getProperties();
-        } else if (properties instanceof IProperties) {
-            prop = (IProperties) properties;
-            holder = prop.getHolder();
-        } else {
-            return false;
+    /**
+     * Parses a number with optional acceleration unit to an acceleration value.
+     * Assumes 1 block is 1 meter.
+     * Supports the following formats:
+     * <ul>
+     * <li>12       =  12 blocks/tick^2</li>
+     * <li>12.5     =  12.5 blocks/tick^2</li>
+     * <li>1g       =  9.81 blocks/second^2 (0.024525 blocks/tick^2)</li>
+     * <li>20/tt    =  20 blocks/tick^2 (0.024525 blocks/tick^2)</li>
+     * <li>20/ss    =  20 blocks/second^2 (0.05 blocks/tick^2)</li>
+     * <li>20/s2    =  20 blocks/second^2 (0.05 blocks/tick^2)</li>
+     * <li>20/mm    =  20 blocks/minute^2</li>
+     * <li>20m/s/s  =  20 blocks/second^2</li>
+     * <li>20km/h/s =  20000 blocks/hour per second</li>
+     * <li>1mi/h/s  =  0.44704 blocks/second^2 (0.0011176 blocks/tick^2)</li>
+     * <li>1mph/s   =  1mi/h/s</li>
+     * <li>3.28ft/s/s = 1 blocks/second^2</li>
+     * </ul>
+     * 
+     * @param accelerationString The text to parse
+     * @param defaultValue The default value to return if parsing fails
+     * @return parsed acceleration in blocks/tick^2
+     */
+    public static double parseAcceleration(String accelerationString, double defaultValue) {
+        // Avoid out of range
+        if (accelerationString.isEmpty()) {
+            return defaultValue;
         }
-        if (holder == null) {
-            return prop.parseSet(key, args);
-        } else if (prop.parseSet(key, args) || holder.parseSet(key, args)) {
-            holder.onPropertiesChanged();
-            return true;
-        } else {
-            return false;
+
+        // To lowercase to prevent weird problems with units
+        accelerationString = accelerationString.toLowerCase(Locale.ENGLISH);
+
+        // Some common accepted aliases
+        accelerationString = accelerationString.replace("kmh", "kmph");
+        accelerationString = accelerationString.replace("kmph", "km/h");
+        accelerationString = accelerationString.replace("miph", "mph");
+        accelerationString = accelerationString.replace("mph", "mi/h");
+
+        // Parsing of the /tt and so on formats of acceleration
+        int slashIndex = accelerationString.indexOf('/');
+        if (slashIndex != -1) {
+            double value;
+
+            // Process the number value contents before the slash
+            {
+                // Take all characters before the slash, eliminate non-digit ones
+                // When encountering a 'k', assume 1000 blocks unit
+                double factor = 1.0;
+                StringBuilder valueStr = new StringBuilder(slashIndex+1);
+                for (int i = 0; i < slashIndex; i++) {
+                    char c = accelerationString.charAt(i);
+                    if (Character.isDigit(c) || c == '.' || c == ',' || c == '-') {
+                        valueStr.append(c);
+                    } else if (c == 'k') {
+                        factor = 1000.0; // kilo(meter)
+                    } else if (c == 'f' && accelerationString.charAt(i+1) == 't') {
+                        factor = 1.0 / 3.28; // feet
+                        i++; // skip 't'
+                    } else if (c == 'm' && accelerationString.charAt(i+1) == 'i') {
+                        factor = 1609.344; // miles
+                        i++; // skip 'i'
+                    }
+                }
+                value = ParseUtil.parseDouble(valueStr.toString(), Double.NaN);
+                if (Double.isNaN(value)) {
+                    return defaultValue;
+                }
+
+                // Factor following the number (e.g: km)
+                value *= factor;
+            }
+
+            int num_units = 0;
+            double factor = 1.0; // tick
+            for (int i = slashIndex+1; i < accelerationString.length() && num_units < 2; i++) {
+                char c = accelerationString.charAt(i);
+                if (c == 's') {
+                    factor *= 20.0; // second is 20 ticks
+                    num_units++;
+                } else if (c == 'm') {
+                    factor *= 1200.0; // minute is 1200 ticks
+                    num_units++;
+                } else if (c == 'h') {
+                    factor *= 72000.0; // hour is 72000 ticks
+                    num_units++;
+                }
+            }
+
+            // If only one time unit was specified, assume we have to square it
+            // For example, 20m/s -> 20m/ss
+            // 20m/s2 -> 20m/ss
+            if (num_units == 1) {
+                factor *= factor;
+            }
+
+            return value / factor;
         }
+
+        // Check whether unit is in g's
+        char lastChar = accelerationString.charAt(accelerationString.length()-1);
+        if (lastChar == 'g') {
+            // Unit is in g's
+            String g_value_str = accelerationString.substring(0, accelerationString.length()-1);
+            double value = ParseUtil.parseDouble(g_value_str, Double.NaN);
+            if (Double.isNaN(value)) {
+                return defaultValue;
+            }
+            return 0.024525 * value;
+        }
+
+        // Assume blocks/tick unit
+        return ParseUtil.parseDouble(accelerationString, defaultValue);
+    }
+
+    /**
+     * Parses a number with optional velocity unit to a velocity value.
+     * Assumes 1 block is 1 meter.
+     * Supports the following formats:
+     * <ul>
+     * <li>12     =  12 blocks/tick</li>
+     * <li>12.5   =  12.5 blocks/tick</li>
+     * <li>20m/s  =  20 meters/second (1 blocks/tick)</li>
+     * <li>20km/h =  20 kilometers/hour (0.27778 blocks/tick)</li>
+     * <li>20mi/h =  20 miles/hour (0.44704 blocks/tick)</li>
+     * <li>3.28ft/s = same as 1 meters/second (0.05 blocks/tick)</li>
+     * <li>20kmh  =  same as 20km/h</li>
+     * <li>20kmph =  same as 20km/h</li>
+     * <li>20mph  =  same as 20mi/h</li>
+     * </ul>
+     * 
+     * @param velocityString The text to parse
+     * @param defaultValue The default value to return if parsing fails
+     * @return parsed velocity in blocks/tick
+     * @see FormattedSpeed#parse(String, FormattedSpeed)
+     */
+    public static double parseVelocity(String velocityString, double defaultValue) {
+        FormattedSpeed speed = FormattedSpeed.parse(velocityString, null);
+        return (speed != null) ? speed.getValue() : defaultValue;
     }
 
     /**
@@ -1317,26 +1437,6 @@ public class Util {
         }
     }
 
-    // For BKC 1.15.2-v1 support (remove when no longer backwards compatible)
-    private static final FastMethod<Void> setBlockActivationEnabledMethod;
-    static {
-        if (Common.hasCapability("Common:EntityController:SetBlockActivationEnabled")) {
-            setBlockActivationEnabledMethod = new FastMethod<Void>();
-            try {
-                setBlockActivationEnabledMethod.init(EntityController.class.getDeclaredMethod("setBlockActivationEnabled", boolean.class));
-            } catch (Throwable t) {
-                throw new RuntimeException("This is impossible", t);
-            }
-        } else {
-            setBlockActivationEnabledMethod = null;
-        }
-    }
-    public static void setBlockActivationEnabled(EntityController<?> controller, boolean enabled) {
-        if (setBlockActivationEnabledMethod != null) {
-            setBlockActivationEnabledMethod.invoke(controller, enabled);
-        }
-    }
-
     /**
      * Checks whether a given direction motion vector is sub-cardinal,
      * pointing into a diagonal and not along a single axis.
@@ -1413,5 +1513,115 @@ public class Util {
         }
 
         return false;
+    }
+
+    /**
+     * Default value of the displayed block offset.
+     * Might be different on some server versions, was 9 at some point apparently.
+     *
+     * @return default displayed block offset
+     */
+    public static int getDefaultDisplayedBlockOffset() {
+        return 6;
+    }
+
+    public static Optional<Set<String>> getConfigStringSetOptional(ConfigurationNode config, String key) {
+        if (config.contains(key)) {
+            List<String> configList = config.getList(key, String.class);
+            Set<String> resultSet = new HashSet<String>(configList);
+            return Optional.of(Collections.unmodifiableSet(resultSet));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<List<String>> getConfigStringListOptional(ConfigurationNode config, String key) {
+        if (config.contains(key)) {
+            List<String> configList = config.getList(key, String.class);
+            List<String> listCopy = new ArrayList<String>(configList);
+            return Optional.of(Collections.unmodifiableList(listCopy));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    public static void setConfigStringCollectionOptional(ConfigurationNode config, String key, Optional<? extends Collection<String>> value) {
+        if (value.isPresent()) {
+            //TODO: Use ItemSynchronizer.identity()
+            LogicUtil.synchronizeList(
+                    config.getList(key, String.class),
+                    value.get(),
+                    new ItemSynchronizer<String, String>() {
+                        @Override
+                        public boolean isItem(String item, String value) {
+                            return Objects.equals(item, value);
+                        }
+
+                        @Override
+                        public String onAdded(String value) {
+                            return value;
+                        }
+
+                        @Override
+                        public void onRemoved(String item) {
+                        }
+                    }
+            );
+        } else {
+            config.remove(key);
+        }
+    }
+
+    /**
+     * Uses {@link ConfigurationNode#get(String, Class)} when the value is contained in the
+     * configuration node, otherwise returns empty if the value does not exist or is of an
+     * incompatible type.
+     * 
+     * @param <T> Value type
+     * @param config Configuration to read from
+     * @param key Key to read from
+     * @param type Type of value to get
+     * @return read value as an optional, or {@link Optional#empty()}
+     */
+    public static <T> Optional<T> getConfigOptional(ConfigurationNode config, String key, Class<T> type) {
+        if (config.contains(key)) {
+            return Optional.ofNullable(config.get(key, type, null));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Uses {@link ConfigurationNode#set(String, Object)} when the value {@link Optional#isPresent()},
+     * otherwise uses {@link ConfigurationNode#remove(String)} to remove the key. Automatically
+     * removes empty nodes that result from removing.
+     * 
+     * @param config Configuration to update
+     * @param key Key to update
+     * @param value New value to set
+     */
+    public static void setConfigOptional(ConfigurationNode config, String key, Optional<?> value) {
+        if (value.isPresent()) {
+            config.set(key, value.get());
+        } else if (config.contains(key)) {
+            config.remove(key);
+
+            // Clean up parent nodes part of the key that have no children
+            YamlPath parentYamlPath = YamlPath.create(key).parent();
+            while (parentYamlPath != YamlPath.ROOT) {
+                String parentPath = parentYamlPath.toString();
+                if (!config.isNode(parentPath)) {
+                    break;
+                }
+
+                ConfigurationNode parent = config.getNode(parentPath);
+                if (!parent.isEmpty()) {
+                    break;
+                }
+
+                parent.remove();
+                parentYamlPath = parentYamlPath.parent();
+            }
+        }
     }
 }

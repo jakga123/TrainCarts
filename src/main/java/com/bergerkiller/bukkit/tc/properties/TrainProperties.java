@@ -1,23 +1,23 @@
 package com.bergerkiller.bukkit.tc.properties;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
-import org.bukkit.util.Vector;
 
 import com.bergerkiller.bukkit.common.BlockLocation;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
@@ -25,61 +25,68 @@ import com.bergerkiller.bukkit.common.inventory.ItemParser;
 import com.bergerkiller.bukkit.common.utils.LogicUtil;
 import com.bergerkiller.bukkit.common.utils.MathUtil;
 import com.bergerkiller.bukkit.common.utils.ParseUtil;
-import com.bergerkiller.bukkit.common.utils.StringUtil;
 import com.bergerkiller.bukkit.tc.CollisionMode;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
-import com.bergerkiller.bukkit.tc.controller.MinecartGroupStore;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.controller.MinecartMemberStore;
+import com.bergerkiller.bukkit.tc.properties.api.IProperty;
+import com.bergerkiller.bukkit.tc.properties.api.IPropertyRegistry;
+import com.bergerkiller.bukkit.tc.properties.api.PropertyParseResult;
+import com.bergerkiller.bukkit.tc.properties.standard.StandardProperties;
+import com.bergerkiller.bukkit.tc.properties.standard.fieldbacked.FieldBackedStandardTrainProperty;
+import com.bergerkiller.bukkit.tc.properties.standard.type.CollisionOptions;
+import com.bergerkiller.bukkit.tc.properties.standard.type.BankingOptions;
+import com.bergerkiller.bukkit.tc.properties.standard.type.CollisionMobCategory;
+import com.bergerkiller.bukkit.tc.properties.standard.type.SignSkipOptions;
+import com.bergerkiller.bukkit.tc.properties.standard.type.SlowdownMode;
+import com.bergerkiller.bukkit.tc.properties.standard.type.WaitOptions;
 import com.bergerkiller.bukkit.tc.signactions.SignActionBlockChanger;
 import com.bergerkiller.bukkit.tc.storage.OfflineGroup;
 import com.bergerkiller.bukkit.tc.storage.OfflineGroupManager;
-import com.bergerkiller.bukkit.tc.utils.SignSkipOptions;
-import com.bergerkiller.bukkit.tc.utils.SlowdownMode;
 import com.bergerkiller.bukkit.tc.utils.SoftReference;
 
 public class TrainProperties extends TrainPropertiesStore implements IProperties {
-    public static final TrainProperties EMPTY = new TrainProperties("");
     private static final long serialVersionUID = 1L;
 
-    static {
-        EMPTY.add(CartProperties.EMPTY);
-    }
-
     private final SoftReference<MinecartGroup> group = new SoftReference<>();
-    private Map<CollisionConfig, CollisionMode> collisionModes = new HashMap<>();
-    public CollisionMode playerCollision = CollisionMode.DEFAULT;
-    public CollisionMode miscCollision = CollisionMode.PUSH;
-    public CollisionMode trainCollision = CollisionMode.LINK;
-    public CollisionMode blockCollision = CollisionMode.DEFAULT;
-    public boolean requirePoweredMinecart = false;
+    private final FieldBackedStandardTrainProperty.TrainInternalDataHolder standardProperties = new FieldBackedStandardTrainProperty.TrainInternalDataHolder();
+    private final ConfigurationNode config;
     protected String trainname;
-    private String displayName;
-    private boolean collision = true;
-    private final EnumSet<SlowdownMode> slowDownOptions = EnumSet.allOf(SlowdownMode.class);
-    private double speedLimit = 0.4;
-    private double collisionDamage = 1.0D;
-    private boolean keepChunksLoaded = false;
-    private boolean allowPlayerManualMovement = false;
-    private boolean allowMobManualMovement = false;
-    private boolean allowPlayerTake = false;
-    private boolean soundEnabled = true;
-    private List<String> tickets = new ArrayList<>();
-    private SignSkipOptions skipOptions = new SignSkipOptions();
-    private String blockTypes = "";
-    private int blockOffset = SignActionBlockChanger.BLOCK_OFFSET_NONE;
-    private double waitDistance = 0.0;
-    private double bankingStrength = 0.0;
-    private double bankingSmoothness = 10.0;
-    private boolean suffocation = true;
-    private double gravity = 1.0;
-    private String killMessage = "";
 
-    protected TrainProperties(String trainname) {
-        this.displayName = this.trainname = trainname;
+    /**
+     * Creates new TrainProperties<br>
+     * <br>
+     * <b>Warning: must call onConfigurationChanged(true) on it or things break!</b>
+     * 
+     * @param trainname
+     * @param config
+     */
+    protected TrainProperties(String trainname, ConfigurationNode config) {
+        this.trainname = trainname;
+        this.config = config;
+
+        // Pre-initialize the cart configuration, if such is available
+        if (config.isNode("carts")) {
+            for (ConfigurationNode cartConfig : config.getNode("carts").getNodes()) {
+                // Decode node key as UUID
+                UUID uuid;
+                try {
+                    uuid = UUID.fromString(cartConfig.getName());
+                } catch (IllegalArgumentException ex) {
+                    TrainCarts.plugin.getLogger().log(Level.WARNING, "Invalid UUID for cart: " + cartConfig.getName());
+                    continue;
+                }
+
+                // Initialize cart properties and assign it to these train properties
+                // Note: use super.add() to avoid call to .getConfig(), which would wipe everything
+                CartProperties cProp = CartPropertiesStore.createNew(this, cartConfig, uuid);
+                cProp.group = this;
+                super.add(CartPropertiesStore.createNew(this, cartConfig, uuid));
+            }
+        }
     }
 
     @Override
@@ -88,12 +95,47 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
     }
 
     @Override
+    public final ConfigurationNode getConfig() {
+        return this.config;
+    }
+
+    @Override
+    public final <T> T get(IProperty<T> property) {
+        return property.get(this);
+    }
+
+    @Override
+    public final <T> void set(IProperty<T> property, T value) {
+        property.set(this, value);
+    }
+
+    /**
+     * Internal use only
+     */
+    public FieldBackedStandardTrainProperty.TrainInternalDataHolder getStandardPropertiesHolder() {
+        return standardProperties;
+    }
+
+    @Override
     public MinecartGroup getHolder() {
         MinecartGroup group = this.group.get();
         if (group == null || group.isRemoved()) {
-            return this.group.set(MinecartGroupStore.get(this));
+            return null;
         } else {
             return group;
+        }
+    }
+
+    protected void updateHolder(MinecartGroup holder, boolean set) {
+        if (set) {
+            if (this.group.get() != holder) {
+                this.group.set(holder);
+                this.onConfigurationChanged(true);
+            }
+        } else {
+            if (this.group.get() == holder) {
+                this.group.set(null);
+            }
         }
     }
 
@@ -110,7 +152,6 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
         // Load all the chunks of this group to trigger a restore
         OfflineGroup group = OfflineGroupManager.findGroup(this.trainname);
         if (group == null) {
-            TrainPropertiesStore.remove(this.getTrainName());
             return false;
         }
         World world = Bukkit.getWorld(group.worldUUID);
@@ -129,8 +170,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return waitDistance
      */
     public double getWaitDistance() {
-        return this.waitDistance;
-
+        return get(StandardProperties.WAIT).distance();
     }
 
     /**
@@ -139,8 +179,79 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * 
      * @param waitDistance
      */
-    public void setWaitDistance(double waitDistance) {
-        this.waitDistance = waitDistance;
+    public void setWaitDistance(final double waitDistance) {
+        this.update(StandardProperties.WAIT, opt -> WaitOptions.create(
+                waitDistance, opt.delay(), opt.acceleration(), opt.deceleration()
+        ));
+    }
+
+    /**
+     * Gets the number of seconds that must elapse after waiting for another train before the train starts moving again.
+     * This is used when a wait distance is set.
+     * 
+     * @return wait delay in seconds, used after waiting for a train
+     */
+    public double getWaitDelay() {
+        return get(StandardProperties.WAIT).delay();
+    }
+
+    /**
+     * Sets the number of seconds that must elapse after waiting for another train before the train starts moving again.
+     * This is used when a wait distance is set.
+     * 
+     * @param delay Delay to set to in seconds
+     */
+    public void setWaitDelay(final double delay) {
+        this.update(StandardProperties.WAIT, opt -> WaitOptions.create(
+                opt.distance(), delay, opt.acceleration(), opt.deceleration()
+        ));
+    }
+
+    /**
+     * Gets the acceleration in blocks/tick^2 of the train when speeding up again after waiting for a train.
+     * The speed of the train goes up by this amount every tick. If 0, the acceleration is instant.
+     * 
+     * @return acceleration of the train when speeding up after waiting
+     */
+    public double getWaitAcceleration() {
+        return get(StandardProperties.WAIT).acceleration();
+    }
+
+    /**
+     * Gets the deceleration inblocks/tick^2 of the train when slowing down, when the train has to wait
+     * for another train. Speed of the train goes down by this amount every tick. If 0, the deceleration
+     * is instant.
+     * 
+     * @return deceleration of the train when slowing down to wait for another train
+     */
+    public double getWaitDeceleration() {
+        return get(StandardProperties.WAIT).deceleration();
+    }
+
+    /**
+     * Sets the acceleration in blocks/tick^2 of the train when speeding up and slowing down
+     * while trying to maintain distance. The acceleration of speeding up and slowing down
+     * is set to the same value
+     * 
+     * @param acceleration Acceleration at which to speed up/slow down
+     */
+    public void setWaitAcceleration(double acceleration) {
+        setWaitAcceleration(acceleration, acceleration);
+    }
+
+    /**
+     * Sets the acceleration in blocks/tick^2 of the train when speeding up and slowing down
+     * while trying to maintain distance. The acceleration (speed up) and deceleration (slowing down)
+     * can be separately specified.
+     * 
+     * @param acceleration Acceleration at which to speed up
+     * @param deceleration Acceleration at which to slow down
+     * @see {@link #getWaitAcceleration()}
+     */
+    public void setWaitAcceleration(final double acceleration, final double deceleration) {
+        this.update(StandardProperties.WAIT, opt -> WaitOptions.create(
+                opt.distance(), opt.delay(), acceleration, deceleration
+        ));
     }
 
     /**
@@ -150,7 +261,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return max speed in blocks/tick
      */
     public double getSpeedLimit() {
-        return this.speedLimit;
+        return StandardProperties.SPEEDLIMIT.getDouble(this);
     }
 
     /**
@@ -160,7 +271,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param limit in blocks/tick
      */
     public void setSpeedLimit(double limit) {
-        this.speedLimit = MathUtil.clamp(limit, 0, TCConfig.maxVelocity);
+        set(StandardProperties.SPEEDLIMIT, limit);
     }
 
     /**
@@ -169,7 +280,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return gravity factor
      */
     public double getGravity() {
-        return this.gravity;
+        return StandardProperties.GRAVITY.getDouble(this);
     }
 
     /**
@@ -178,7 +289,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param gravity
      */
     public void setGravity(double gravity) {
-        this.gravity = gravity;
+        set(StandardProperties.GRAVITY, gravity);
     }
 
     /**
@@ -189,7 +300,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      */
     @Deprecated
     public boolean isSlowingDown() {
-        return !this.slowDownOptions.isEmpty();
+        return !get(StandardProperties.SLOWDOWN).isEmpty();
     }
 
     /**
@@ -198,7 +309,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True if all modes are active (legacy slowdown = true set)
      */
     public boolean isSlowingDownAll() {
-        return this.slowDownOptions.size() == SlowdownMode.values().length;
+        return get(StandardProperties.SLOWDOWN).equals(EnumSet.allOf(SlowdownMode.class));
     }
 
     /**
@@ -207,7 +318,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True if all slowdown is disabled (legacy slowdown = false set)
      */
     public boolean isSlowingDownNone() {
-        return this.slowDownOptions.isEmpty();
+        return get(StandardProperties.SLOWDOWN).isEmpty();
     }
 
     /**
@@ -218,11 +329,9 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      */
     public void setSlowingDown(boolean slowingDown) {
         if (slowingDown) {
-            for (SlowdownMode mode : SlowdownMode.values()) {
-                this.slowDownOptions.add(mode);
-            }
+            set(StandardProperties.SLOWDOWN, EnumSet.allOf(SlowdownMode.class));
         } else {
-            this.slowDownOptions.clear();
+            set(StandardProperties.SLOWDOWN, Collections.emptySet());
         }
     }
 
@@ -233,7 +342,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True if the slowdown mode is activated
      */
     public boolean isSlowingDown(SlowdownMode mode) {
-        return this.slowDownOptions.contains(mode);
+        return get(StandardProperties.SLOWDOWN).contains(mode);
     }
 
     /**
@@ -242,35 +351,39 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param mode        to set
      * @param slowingDown option to set that mode to
      */
-    public void setSlowingDown(SlowdownMode mode, boolean slowingDown) {
-        LogicUtil.addOrRemove(this.slowDownOptions, mode, slowingDown);
+    public void setSlowingDown(final SlowdownMode mode, final boolean slowingDown) {
+        update(StandardProperties.SLOWDOWN, curr_modes -> {
+            if (slowingDown == curr_modes.contains(mode)) {
+                return curr_modes;
+            } else {
+                EnumSet<SlowdownMode> new_modes = EnumSet.noneOf(SlowdownMode.class);
+                new_modes.addAll(curr_modes);
+                LogicUtil.addOrRemove(new_modes, mode, slowingDown);
+                return new_modes;
+            }
+        });
     }
 
     /**
-     * Gets whether this Train can collide with other Entities and Trains
-     *
-     * @return True if it can collide, False if not
-     */
-    public boolean getColliding() {
-        return this.collision;
-    }
-
-    /**
-     * Sets whether this Train can collide with other Entities and Trains
-     *
-     * @param state to set to
-     */
-    public void setColliding(boolean state) {
-        this.collision = state;
-    }
-
-    /**
-     * Gets the Display Name of these properties
+     * Gets the Display Name of these properties. If none is configured,
+     * returns the train name instead. To check whether one is configured,
+     * use {@link #getDisplayNameOrEmpty()}.
      *
      * @return display name
      */
     public String getDisplayName() {
-        return this.displayName;
+        String name = get(StandardProperties.DISPLAY_NAME);
+        return name.isEmpty() ? this.getTrainName() : name;
+    }
+
+    /**
+     * Gets the currently configured display name. If none is configured,
+     * returns an Empty String.
+     * 
+     * @return display name, or empty if none is set
+     */
+    public String getDisplayNameOrEmpty() {
+        return get(StandardProperties.DISPLAY_NAME);
     }
 
     /**
@@ -280,11 +393,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param displayName to set to
      */
     public void setDisplayName(String displayName) {
-        if (displayName == null || displayName.isEmpty()) {
-            this.displayName = this.trainname;
-        } else {
-            this.displayName = displayName;
-        }
+        set(StandardProperties.DISPLAY_NAME, displayName);
     }
 
     /**
@@ -293,7 +402,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True or False
      */
     public boolean isKeepingChunksLoaded() {
-        return this.keepChunksLoaded;
+        return get(StandardProperties.KEEP_CHUNKS_LOADED);
     }
 
     /**
@@ -302,16 +411,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param state to set to
      */
     public void setKeepChunksLoaded(boolean state) {
-        if (state && !this.keepChunksLoaded) {
-            this.restore();
-        }
-        if (state != this.keepChunksLoaded) {
-            this.keepChunksLoaded = state;
-            MinecartGroup group = this.getHolder();
-            if (group != null) {
-                group.keepChunksLoaded(state);
-            }
-        }
+        set(StandardProperties.KEEP_CHUNKS_LOADED, state);
     }
 
     /**
@@ -320,7 +420,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True if enabled, False if not
      */
     public boolean isSoundEnabled() {
-        return this.soundEnabled;
+        return get(StandardProperties.SOUND_ENABLED);
     }
 
     /**
@@ -329,34 +429,51 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param enabled state to set to
      */
     public void setSoundEnabled(boolean enabled) {
-        this.soundEnabled = enabled;
-    }
-
-    /*
-     * Carts
-     */
-    public void add(MinecartMember<?> member) {
-        this.add(member.getProperties());
-    }
-
-    @Override
-    public boolean remove(Object o) {
-        if (o instanceof MinecartMember<?>) {
-            return super.remove(((MinecartMember<?>) o).getProperties());
-        } else {
-            return super.remove(o);
-        }
+        set(StandardProperties.SOUND_ENABLED, enabled);
     }
 
     @Override
     public boolean add(CartProperties properties) {
+        // Before assigning, un-assign from the previous train properties
+        // This will remove it from itself, and the configuration
+        if (properties.group != null && properties.group != this) {
+            properties.group.remove(properties);
+        }
+
+        // Assign new group and try to add
         properties.group = this;
-        return super.add(properties);
+        if (!super.add(properties)) {
+            return false;
+        }
+
+        // Bind cart properties configuration to this train's configuration
+        this.config.getNode("carts").set(properties.getUUID().toString(), properties.getConfig());
+        return true;
+    }
+
+    @Override
+    public boolean remove(Object o) {
+        // MinecartMember -> CartProperties (TODO: Get rid of this? Gross!)
+        if (o instanceof MinecartMember<?>) {
+            o = ((MinecartMember<?>) o).getProperties();
+        }
+
+        // Not part of these train properties
+        if (!super.remove(o)) {
+            return false;
+        }
+
+        // Remove from 'carts' configuration
+        if (o instanceof CartProperties && this.config.isNode("carts")) {
+            this.config.getNode("carts").remove(((CartProperties) o).getUUID().toString());
+        }
+        return true;
     }
 
     public CartProperties get(int index) {
+        int i = 0;
         for (CartProperties prop : this) {
-            if (index-- == 0) {
+            if (i++ == index) {
                 return prop;
             }
         }
@@ -422,24 +539,42 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
 
     @Override
     public Set<String> getOwners() {
-        Set<String> rval = new HashSet<>();
-        for (CartProperties cprop : this) {
-            rval.addAll(cprop.getOwners());
-        }
-        return rval;
+        return get(StandardProperties.OWNERS);
     }
 
     @Override
     public void clearOwners() {
-        for (CartProperties prop : this) {
-            prop.clearOwners();
-        }
+        set(StandardProperties.OWNERS, Collections.emptySet());
     }
 
     @Override
     public void clearOwnerPermissions() {
         for (CartProperties prop : this) {
             prop.clearOwnerPermissions();
+        }
+    }
+
+    public void addOwnerPermission(final String permission) {
+        for (CartProperties prop : this) {
+            prop.addOwnerPermission(permission);
+        }
+    }
+
+    public void removeOwnerPermission(final String permission) {
+        for (CartProperties prop : this) {
+            prop.removeOwnerPermission(permission);
+        }
+    }
+
+    /**
+     * Sets whether a player name is an owner of carts of this train.
+     * 
+     * @param player Name of the player to add
+     * @param owner True to add as owner, False to remove as owner
+     */
+    public void setOwner(final String player, final boolean owner) {
+        for (CartProperties cProp : this) {
+            cProp.setOwner(player, owner);
         }
     }
 
@@ -450,7 +585,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True if players can take Minecarts with them, False if not.
      */
     public boolean isPlayerTakeable() {
-        return this.allowPlayerTake;
+        return get(StandardProperties.ALLOW_PLAYER_TAKE);
     }
 
     /**
@@ -460,40 +595,41 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param takeable state to set to
      */
     public void setPlayerTakeable(boolean takeable) {
-        this.allowPlayerTake = takeable;
+        set(StandardProperties.ALLOW_PLAYER_TAKE, takeable);
     }
 
     public double getBankingStrength() {
-        return this.bankingStrength;
+        return get(StandardProperties.BANKING).strength();
     }
 
     public double getBankingSmoothness() {
-        return this.bankingSmoothness;
+        return get(StandardProperties.BANKING).smoothness();
     }
 
-    public void setBankingStrength(double strength) {
-        this.bankingStrength = strength;
+    public void setBanking(double strength, double smoothness) {
+        set(StandardProperties.BANKING, BankingOptions.create(strength, smoothness));
     }
 
-    public void setBankingSmoothness(double smoothness) {
-        this.bankingSmoothness = smoothness;
+    public void setBankingStrength(final double strength) {
+        update(StandardProperties.BANKING, opt -> BankingOptions.create(
+                strength, opt.smoothness()
+        ));
+    }
+
+    public void setBankingSmoothness(final double smoothness) {
+        update(StandardProperties.BANKING, opt -> BankingOptions.create(
+                opt.strength(), smoothness
+        ));
     }
 
     @Override
-    public boolean isPublic() {
-        for (CartProperties prop : this) {
-            if (prop.isPublic()) {
-                return true;
-            }
-        }
-        return false;
+    public boolean getCanOnlyOwnersEnter() {
+        return get(StandardProperties.ONLY_OWNERS_CAN_ENTER);
     }
 
     @Override
-    public void setPublic(boolean state) {
-        for (CartProperties prop : this) {
-            prop.setPublic(state);
-        }
+    public void setCanOnlyOwnersEnter(boolean state) {
+        set(StandardProperties.ONLY_OWNERS_CAN_ENTER, state);
     }
 
     @Override
@@ -523,25 +659,17 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
 
     @Override
     public Collection<String> getTags() {
-        Set<String> tags = new HashSet<>();
-        for (CartProperties prop : this) {
-            tags.addAll(prop.getTags());
-        }
-        return tags;
+        return get(StandardProperties.TAGS);
     }
 
     @Override
     public void setTags(String... tags) {
-        for (CartProperties prop : this) {
-            prop.setTags(tags);
-        }
+        set(StandardProperties.TAGS, new HashSet<String>(Arrays.asList(tags)));
     }
 
     @Override
     public void clearTags() {
-        for (CartProperties prop : this) {
-            prop.clearTags();
-        }
+        set(StandardProperties.TAGS, Collections.emptySet());
     }
 
     @Override
@@ -628,50 +756,32 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
 
     @Override
     public boolean hasDestination() {
-        for (CartProperties prop : this) {
-            if (prop.hasDestination()) return true;
-        }
-        return false;
+        return !get(StandardProperties.DESTINATION).isEmpty();
     }
 
     @Override
     public String getDestination() {
-        for (CartProperties prop : this) {
-            if (prop.hasDestination()) return prop.getDestination();
-        }
-        return "";
+        return get(StandardProperties.DESTINATION);
     }
 
     @Override
     public void setDestination(String destination) {
-        for (CartProperties prop : this) {
-            prop.setDestination(destination);
-        }
+        set(StandardProperties.DESTINATION, destination);
     }
 
     @Override
     public List<String> getDestinationRoute() {
-        for (CartProperties prop : this) {
-            List<String> route = prop.getDestinationRoute();
-            if (!route.isEmpty()) {
-                return route;
-            }
-        }
-        return Collections.emptyList();
+        return get(StandardProperties.DESTINATION_ROUTE);
     }
 
     @Override
     public void setDestinationRoute(List<String> route) {
-        for (CartProperties prop : this) {
-            prop.setDestinationRoute(route);
-        }
+        set(StandardProperties.DESTINATION_ROUTE, route);
     }
 
     @Override
     public void clearDestinationRoute() {
-        for (CartProperties prop : this) {
-            prop.clearDestinationRoute();
-        }
+        set(StandardProperties.DESTINATION_ROUTE, Collections.emptyList());
     }
 
     @Override
@@ -727,30 +837,37 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
         }
     }
 
-    /**
-     * Gets the Collision Mode for colliding with the Entity specified
-     *
-     * @param entity to collide with
-     * @return Collision Mode
-     */
-    public Set<CollisionMode> getAllCollisionModes() {
-        return (Set<CollisionMode>) this.collisionModes.values();
+    public boolean isPoweredMinecartRequired() {
+        return get(StandardProperties.REQUIRE_POWERED_MINECART);
+    }
+
+    public void setPoweredMinecartRequired(boolean required) {
+        set(StandardProperties.REQUIRE_POWERED_MINECART, required);
+    }
+
+    public double getCollisionDamage() {
+        return get(StandardProperties.COLLISION_DAMAGE);
+    }
+
+    public void setCollisionDamage(double collisionDamage) {
+        set(StandardProperties.COLLISION_DAMAGE, collisionDamage);
     }
 
     public CollisionMode getCollisionMode(Entity entity) {
-        if (!this.getColliding() || entity.isDead()) {
+        if (entity.isDead()) {
             return CollisionMode.CANCEL;
         }
         MinecartMember<?> member = MinecartMemberStore.getFromEntity(entity);
+        CollisionOptions collision = this.getCollision();
         if (member != null) {
-            if (this.trainCollision == CollisionMode.LINK) {
-                if (member.getGroup().getProperties().trainCollision == CollisionMode.LINK) {
+            if (collision.trainMode() == CollisionMode.LINK) {
+                if (member.getGroup().getProperties().getCollision().trainMode() == CollisionMode.LINK) {
                     return CollisionMode.LINK;
                 } else {
                     return CollisionMode.CANCEL;
                 }
             } else {
-                return this.trainCollision;
+                return collision.trainMode();
             }
         } else if (entity instanceof Player) {
         	
@@ -758,23 +875,29 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
             if (playerGameMode == GameMode.SPECTATOR) {
                 return CollisionMode.CANCEL;
             }
+            if (TCConfig.collisionIgnoreOwners && collision.playerMode() != CollisionMode.DEFAULT) {
+                if (TCConfig.collisionIgnoreGlobalOwners) {
+                    if (CartProperties.hasGlobalOwnership((Player) entity)) {
+                        return CollisionMode.CANCEL;
+                    }
+                }
+                if (this.hasOwnership((Player) entity)) {
+                    return CollisionMode.CANCEL;
+                }
+            }
             // Don't kill or damage players in creative
             if (playerGameMode == GameMode.CREATIVE) {
-                if (this.playerCollision == CollisionMode.KILL || this.playerCollision == CollisionMode.KILLNODROPS || this.playerCollision == CollisionMode.DAMAGE
-                        || this.playerCollision == CollisionMode.DAMAGENODROPS) {
+                if (collision.playerMode() == CollisionMode.KILL ||
+                    collision.playerMode() == CollisionMode.KILLNODROPS ||
+                    collision.playerMode() == CollisionMode.DAMAGE ||
+                    collision.playerMode() == CollisionMode.DAMAGENODROPS)
+                {
                     return CollisionMode.PUSH;
                 }
             }
-            return this.playerCollision;
-            
+            return collision.playerMode();
         } else {
-            for (CollisionConfig collisionConfigObject : CollisionConfig.values()) {
-                CollisionMode collisionMode = this.collisionModes.get(collisionConfigObject);
-                if (collisionMode != null && collisionConfigObject.isMobType(entity)) {
-                    return collisionMode;
-                }
-            }
-            return this.miscCollision;
+            return collision.forEntity(entity);
         }
     }
 
@@ -786,6 +909,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * Renames this train, this should be called to rename the train safely.
      *
      * @param newtrainname to set to
+     * @throws IllegalArgumentException if another train by this name already {@link #exists(String)}
      */
     public void setTrainName(String newTrainName) {
         rename(this, newTrainName);
@@ -811,7 +935,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True if suffocation damage is enabled
      */
     public boolean hasSuffocation() {
-        return this.suffocation;
+        return get(StandardProperties.SUFFOCATION);
     }
 
     /**
@@ -820,7 +944,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param suffocation option
      */
     public void setSuffocation(boolean suffocation) {
-        this.suffocation = suffocation;
+        set(StandardProperties.SUFFOCATION, suffocation);
     }
 
     /**
@@ -829,7 +953,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True if manual movement is allowed, False if not
      */
     public boolean isManualMovementAllowed() {
-        return this.allowPlayerManualMovement;
+        return get(StandardProperties.ALLOW_PLAYER_MANUAL_MOVEMENT);
     }
 
     /**
@@ -838,7 +962,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param allow state to set to
      */
     public void setManualMovementAllowed(boolean allow) {
-        this.allowPlayerManualMovement = allow;
+        set(StandardProperties.ALLOW_PLAYER_MANUAL_MOVEMENT, allow);
     }
 
     /**
@@ -847,7 +971,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @return True if manual movement is allowed, False if not
      */
     public boolean isMobManualMovementAllowed() {
-        return this.allowMobManualMovement;
+        return get(StandardProperties.ALLOW_MOB_MANUAL_MOVEMENT);
     }
 
     /**
@@ -856,7 +980,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param allow state to set to
      */
     public void setMobManualMovementAllowed(boolean allow) {
-        this.allowMobManualMovement = allow;
+        set(StandardProperties.ALLOW_MOB_MANUAL_MOVEMENT, allow);
     }
 
     /**
@@ -864,8 +988,8 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * 
      * @return tickets
      */
-    public List<String> getTickets() {
-        return Collections.unmodifiableList(this.tickets);
+    public Set<String> getTickets() {
+        return get(StandardProperties.TICKETS);
     }
 
     /**
@@ -874,7 +998,15 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param ticketName to add
      */
     public void addTicket(String ticketName) {
-        this.tickets.add(ticketName);
+        update(StandardProperties.TICKETS, tickets -> {
+            if (tickets.contains(ticketName)) {
+                return tickets;
+            } else {
+                HashSet<String> new_tickets = new HashSet<>(tickets);
+                new_tickets.add(ticketName);
+                return new_tickets;
+            }
+        });
     }
 
     /**
@@ -883,27 +1015,35 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param ticketName to remove
      */
     public void removeTicket(String ticketName) {
-        this.tickets.remove(ticketName);
+        update(StandardProperties.TICKETS, tickets -> {
+            if (!tickets.contains(ticketName)) {
+                return tickets;
+            } else {
+                HashSet<String> new_tickets = new HashSet<>(tickets);
+                new_tickets.remove(ticketName);
+                return new_tickets;
+            }
+        });
     }
 
     public void clearTickets() {
-        this.tickets.clear();
+        set(StandardProperties.TICKETS, Collections.emptySet());
     }
 
     public SignSkipOptions getSkipOptions() {
-        return this.skipOptions;
+        return get(StandardProperties.SIGN_SKIP);
     }
 
     public void setSkipOptions(SignSkipOptions options) {
-        this.skipOptions.load(options, false);
+        set(StandardProperties.SIGN_SKIP, options);
     }
 
     public String getKillMessage() {
-        return this.killMessage;
+        return get(StandardProperties.KILL_MESSAGE);
     }
 
     public void setKillMessage(String killMessage) {
-        this.killMessage = killMessage;
+        set(StandardProperties.KILL_MESSAGE, killMessage);
     }
 
     public boolean isTrainRenamed() {
@@ -935,18 +1075,18 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
     }
 
     public void setDefault(String key) {
-        this.setDefault(getDefaultsByName(key));
+        ConfigurationNode config = getDefaultsByName(key);
+        if (config != null) {
+            this.apply(config);
+        }
     }
 
+    /**
+     * <b>Deprecated: use {@link #apply(ConfigurationNode)} instead</b>
+     */
+    @Deprecated
     public void setDefault(ConfigurationNode node) {
-        if (node == null) {
-            return;
-        }
-        this.load(node);
-        for (CartProperties prop : this) {
-            prop.load(node);
-        }
-        this.tryUpdate();
+        this.apply(node);
     }
 
     public void setDefault(Player player) {
@@ -955,7 +1095,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
             this.setDefault();
         } else {
             // Load it
-            this.setDefault(getDefaultsByPlayer(player));
+            this.apply(getDefaultsByPlayer(player));
         }
     }
 
@@ -966,218 +1106,39 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
 
     @Override
     public boolean parseSet(String key, String arg) {
-        TrainPropertiesStore.markForAutosave();
-        if (key.equalsIgnoreCase("exitoffset")) {
-            Vector vec = Util.parseVector(arg, null);
-            if (vec != null) {
-                if (vec.length() > TCConfig.maxEjectDistance) {
-                    vec.normalize().multiply(TCConfig.maxEjectDistance);
-                }
-                for (CartProperties prop : this) {
-                    prop.exitOffset = vec;
-                }
-            }
-        } else if (key.equalsIgnoreCase("exityaw")) {
-            float yaw = ParseUtil.parseFloat(arg, 0.0f);
-            for (CartProperties prop : this) {
-                prop.exitYaw = yaw;
-            }
-        } else if (key.equalsIgnoreCase("exitpitch")) {
-            float pitch = ParseUtil.parseFloat(arg, 0.0f);
-            for (CartProperties prop : this) {
-                prop.exitPitch = pitch;
-            }
-        } else if (LogicUtil.containsIgnoreCase(key, "exitrot", "exitrotation")) {
-            String[] angletext = Util.splitBySeparator(arg);
-            float yaw = 0.0f;
-            float pitch = 0.0f;
-            if (angletext.length == 2) {
-                yaw = ParseUtil.parseFloat(angletext[0], 0.0f);
-                pitch = ParseUtil.parseFloat(angletext[1], 0.0f);
-            } else if (angletext.length == 1) {
-                yaw = ParseUtil.parseFloat(angletext[0], 0.0f);
-            }
-            for (CartProperties prop : this) {
-                prop.exitYaw = yaw;
-                prop.exitPitch = pitch;
-            }
-        } else if (key.equalsIgnoreCase("killmessage")) {
-            this.killMessage = arg;
-        } else if (key.equalsIgnoreCase("sound") || key.equalsIgnoreCase("minecartsound")) {
-            this.soundEnabled = ParseUtil.parseBool(arg);
-        } else if (key.equalsIgnoreCase("playercollision")) {
-            CollisionMode mode = CollisionMode.parse(arg);
-            if (mode == null) return false;
-            this.playerCollision = mode;
-        } else if (key.equalsIgnoreCase("misccollision")) {
-            CollisionMode mode = CollisionMode.parse(arg);
-            if (mode == null) return false;
-            this.miscCollision = mode;
-        } else if (key.equalsIgnoreCase("traincollision")) {
-            CollisionMode mode = CollisionMode.parse(arg);
-            if (mode == null) return false;
-            this.trainCollision = mode;
-        } else if (key.equalsIgnoreCase("blockcollision")) {
-            CollisionMode mode = CollisionMode.parse(arg);
-            if (mode == null) return false;
-            this.blockCollision = mode;
-        } else if (key.equalsIgnoreCase("collisiondamage")) {
-            this.setCollisionDamage(Double.parseDouble(arg));
-        } else if (key.equalsIgnoreCase("suffocation")) {
-            this.suffocation = ParseUtil.parseBool(arg);
-        } else if (this.setCollisionMode(key, arg)) {
-            return true;
-        } else if (LogicUtil.containsIgnoreCase(key, "collision", "collide")) {
-            this.setColliding(ParseUtil.parseBool(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "linking", "link")) {
-            this.setLinking(ParseUtil.parseBool(arg));
-        } else if (key.toLowerCase(Locale.ENGLISH).startsWith("slow")) {
-            SlowdownMode slowMode = null;
-            for (SlowdownMode mode : SlowdownMode.values()) {
-                if (key.contains(mode.getKey())) {
-                    slowMode = mode;
-                    break;
-                }
-            }
-            if (slowMode != null) {
-                this.setSlowingDown(slowMode, ParseUtil.parseBool(arg));
-            } else {
-                this.setSlowingDown(ParseUtil.parseBool(arg));
-            }
-        } else if (LogicUtil.containsIgnoreCase(key, "setdefault", "default")) {
-            this.setDefault(arg);
-        } else if (key.equalsIgnoreCase("pushplayers")) {
-            this.playerCollision = CollisionMode.fromPushing(ParseUtil.parseBool(arg));
-        } else if (key.equalsIgnoreCase("pushmisc")) {
-            this.miscCollision = CollisionMode.fromPushing(ParseUtil.parseBool(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "push", "pushing")) {
-            CollisionMode mode = CollisionMode.fromPushing(ParseUtil.parseBool(arg));
-            this.playerCollision = this.miscCollision = mode;
-            this.setCollisionModeForMobs(mode);
-        } else if (LogicUtil.containsIgnoreCase(key, "speedlimit", "maxspeed")) {
-            this.setSpeedLimit(ParseUtil.parseDouble(arg, 0.4));
-        } else if (LogicUtil.containsIgnoreCase(key, "gravity")) {
-            this.setGravity(ParseUtil.parseDouble(arg, 1.0));
-        } else if (LogicUtil.containsIgnoreCase(key, "allowmanual", "manualmove", "manual")) {
-            this.setManualMovementAllowed(ParseUtil.parseBool(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "allowmobmanual", "mobmanualmove", "mobmanual")) {
-            this.setMobManualMovementAllowed(ParseUtil.parseBool(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "keepcloaded", "loadchunks", "keeploaded")) {
-            this.setKeepChunksLoaded(ParseUtil.parseBool(arg));
-        } else if (key.equalsIgnoreCase("addtag")) {
-            this.addTags(arg);
-        } else if (key.equalsIgnoreCase("settag")) {
-            this.setTags(arg);
-        } else if (key.equalsIgnoreCase("remtag") || key.equalsIgnoreCase("removetag")) {
-            this.removeTags(arg);
-        } else if (key.equalsIgnoreCase("destination")) {
-            this.setDestination(arg);
-        } else if (key.equalsIgnoreCase("addroute")) {
-            this.addDestinationToRoute(arg);
-        } else if (LogicUtil.containsIgnoreCase(key, "remroute", "removeroute")) {
-            this.removeDestinationFromRoute(arg);
-        } else if (key.equalsIgnoreCase("clearroute")) {
-            this.clearDestinationRoute();
-        } else if (key.equalsIgnoreCase("setroute")) {
-            this.clearDestinationRoute();
-            this.addDestinationToRoute(arg);
-        } else if (key.equalsIgnoreCase("loadroute")) {
-            this.setDestinationRoute(TrainCarts.plugin.getRouteManager().findRoute(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "name", "rename", "setname")) {
-            this.setTrainName(generateTrainName(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "dname", "displayname", "setdisplayname", "setdname")) {
-            this.setDisplayName(arg);
-        } else if (LogicUtil.containsIgnoreCase(key, "mobenter", "mobsenter")) {
-            if (ParseUtil.parseBool(arg)) {
-                this.setCollisionModeForMobs(CollisionMode.ENTER);
-            } else {
-                this.setCollisionModeIfModeForMobs(CollisionMode.ENTER, CollisionMode.DEFAULT);
-            }
-        } else if (key.equalsIgnoreCase("waitdistance")) {
-            this.setWaitDistance(ParseUtil.parseDouble(arg, this.waitDistance));
-        } else if (key.equalsIgnoreCase("playerenter")) {
-            this.setPlayersEnter(ParseUtil.parseBool(arg));
-        } else if (key.equalsIgnoreCase("playerexit")) {
-            this.setPlayersExit(ParseUtil.parseBool(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "invincible", "godmode")) {
-            this.setInvincible(ParseUtil.parseBool(arg));
-        } else if (LogicUtil.containsIgnoreCase(key, "banking")) {
-            String[] args = arg.split(" ");
-            this.setBankingStrength(ParseUtil.parseDouble(args[0], this.bankingStrength));
-            if (args.length >= 2) {
-                this.setBankingSmoothness(ParseUtil.parseDouble(args[1], this.bankingSmoothness));
-            }
-        } else if (key.equalsIgnoreCase("setownerperm")) {
-            for (CartProperties prop : this) {
-                prop.clearOwnerPermissions();
-                prop.getOwnerPermissions().add(arg);
-            }
-        } else if (key.equalsIgnoreCase("addownerperm")) {
-            for (CartProperties prop : this) {
-                prop.getOwnerPermissions().add(arg);
-            }
-        } else if (key.equalsIgnoreCase("remownerperm")) {
-            for (CartProperties prop : this) {
-                prop.getOwnerPermissions().remove(arg);
-            }
-        } else if (key.equalsIgnoreCase("setowner")) {
-            arg = arg.toLowerCase();
-            for (CartProperties cprop : this) {
-                cprop.clearOwners();
-                cprop.getOwners().add(arg);
-            }
-        } else if (key.equalsIgnoreCase("addowner")) {
-            arg = arg.toLowerCase();
-            for (CartProperties cprop : this) {
-                cprop.getOwners().add(arg);
-            }
-        } else if (key.equalsIgnoreCase("remowner")) {
-            arg = arg.toLowerCase();
-            for (CartProperties cprop : this) {
-                cprop.getOwners().remove(arg);
-            }
-        } else if (LogicUtil.containsIgnoreCase(key, "spawnitemdrops", "spawndrops", "killdrops")) {
-            this.setSpawnItemDrops(ParseUtil.parseBool(arg));
-        } else if (key.equalsIgnoreCase("addticket")) {
-            this.addTicket(arg);
-        } else if (key.equalsIgnoreCase("remticket")) {
-            this.removeTicket(arg);
-        } else if (key.equalsIgnoreCase("setticket")) {
-            this.clearTickets();
-            if (arg.length() > 0) {
-                this.addTicket(arg);
-            }
-        } else if (key.equalsIgnoreCase("clrticket")) {
-            this.clearTickets();
-        } else if (LogicUtil.containsIgnoreCase(key, "drivesound", "driveeffect")) {
-            for (CartProperties cprop : this) {
-                cprop.setDriveSound(arg);
-            }
-        } else {
-            return false;
-        }
-        this.tryUpdate();
-        return true;
+        // Legacy
+        return parseAndSet(key, arg).getReason() != PropertyParseResult.Reason.PROPERTY_NOT_FOUND;
     }
 
     /**
-     * Gets the collision mode configured for a collision config category
+     * Gets the collision configuration of the train. This stores all the collision rules
+     * to follow when colliding with entities and blocks.
      * 
-     * @param collisionConfigObject
-     * @return mode
+     * @return collision configuration
      */
-    public CollisionMode getCollisionMode(CollisionConfig collisionConfigObject) {
-        return this.collisionModes.get(collisionConfigObject);
+    public CollisionOptions getCollision() {
+        return get(StandardProperties.COLLISION);
     }
 
     /**
-     * Sets the collision mode configured for a collision config category
+     * Sets the collision configuration of the train. This stores all the collision rules
+     * to follow when colliding with entities and blocks. Use the static methods
+     * of {@link CollisionOptions} to change individual modes.
      * 
-     * @param collisionConfigObject
-     * @param mode to set to
+     * @param collisionConfig New collision configuration to set to
      */
-    public void setCollisionMode(CollisionConfig collisionConfigObject, CollisionMode mode) {
-        this.collisionModes.put(collisionConfigObject, mode);
+    public void setCollision(CollisionOptions collisionConfig) {
+        set(StandardProperties.COLLISION, collisionConfig);
+    }
+
+    /**
+     * Sets the collision mode configured for a collision mob category
+     * 
+     * @param mobCategory Category of mob
+     * @param mode to set to, null to reset to defaults
+     */
+    public void setCollisionMode(final CollisionMobCategory mobCategory, final CollisionMode mode) {
+        update(StandardProperties.COLLISION, opt -> opt.cloneAndSetMobMode(mobCategory, mode));
     }
 
     /**
@@ -1213,9 +1174,9 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
             this.setCollisionModeForMobs(mode);
             return true;
         } else {
-            for (CollisionConfig collisionConfigObject : CollisionConfig.values()) {
-                if (mobType.equals(collisionConfigObject.getMobType()) || mobType.equals(collisionConfigObject.getPluralMobType())) {
-                    this.setCollisionMode(collisionConfigObject, mode);
+            for (CollisionMobCategory mobCategory : CollisionMobCategory.values()) {
+                if (mobType.equals(mobCategory.getMobType()) || mobType.equals(mobCategory.getPluralMobType())) {
+                    this.setCollisionMode(mobCategory, mode);
                     return true;
                 }
             }
@@ -1229,11 +1190,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param mode
      */
     public void setCollisionModeForMobs(CollisionMode mode) {
-        for (CollisionConfig collision : CollisionConfig.values()) {
-            if (collision.isMobCategory()) {
-                setCollisionMode(collision, mode);
-            }
-        }
+        setCollision(getCollision().cloneAndSetForAllMobs(mode));
     }
 
     /**
@@ -1243,12 +1200,8 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * @param expected
      * @param mode
      */
-    public void setCollisionModeIfModeForMobs(CollisionMode expected, CollisionMode mode) {
-        for (CollisionConfig collision : CollisionConfig.values()) {
-            if (collision.isMobCategory() && getCollisionMode(collision) == expected) {
-                setCollisionMode(collision, mode);
-            }
-        }
+    public void setCollisionModeIfModeForMobs(final CollisionMode expected, final CollisionMode mode) {
+        setCollision(getCollision().cloneCompareAndSetForAllMobs(expected, mode));
     }
 
     /**
@@ -1257,278 +1210,150 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
      * 
      * @param linking
      */
-    public void setLinking(boolean linking) {
-        if (linking) {
-            this.trainCollision = CollisionMode.LINK;
-        } else if (this.trainCollision == CollisionMode.LINK) {
-            this.trainCollision = CollisionMode.DEFAULT;
-        }
+    public void setLinking(final boolean linking) {
+        update(StandardProperties.COLLISION, opt -> {
+            if (linking) {
+                return opt.cloneAndSetTrainMode(CollisionMode.LINK);
+            } else if (opt.trainMode() == CollisionMode.LINK) {
+                return opt.cloneAndSetTrainMode(CollisionMode.DEFAULT);
+            } else {
+                return opt;
+            }
+        });
+    }
+
+    /**
+     * Loads the properties from the TrainProperties source specified<br>
+     * Cart properties are not transferred or updated!
+     * This is used when splitting the properties of one train into two.
+     *
+     * @param source to load from
+     * @see #load(ConfigurationNode)
+     */
+    public void load(TrainProperties source) {
+        this.load(source.saveToConfig());
     }
 
     /**
      * Loads the train properties from YAML configuration.
      * All train-level properties are loaded. Cart properties of carts that
-     * belong to this train are not updated. If the input YAML contains a <i>carts</i>
-     * node, the carts belonging to the train are initialized also.
+     * belong to this train are not updated.<br>
+     * <br>
+     * The input configuration should <b>only</b> contain train configurations.
+     * If properties for carts should be loaded also, use {@link #apply(ConfigurationNode)}
+     * instead.<br>
+     * <br>
+     * All original values and child nodes of the input node is deep-cloned, so further
+     * changes to the node do not affect these properties and vice-versa.
      * 
      * @param node The YAML configuration node to load from
      */
     @Override
     public void load(ConfigurationNode node) {
-        this.setDisplayName(node.get("displayName", this.displayName));
-        this.allowPlayerTake = node.get("allowPlayerTake", this.allowPlayerTake);
-        this.collision = node.get("trainCollision", this.collision);
-        this.setCollisionDamage(node.get("collisionDamage", this.getCollisionDamage()));
-        this.soundEnabled = node.get("soundEnabled", this.soundEnabled);
-        this.speedLimit = MathUtil.clamp(node.get("speedLimit", this.speedLimit), 0, TCConfig.maxVelocity);
-        this.gravity = node.get("gravity", this.gravity);
-        this.requirePoweredMinecart = node.get("requirePoweredMinecart", this.requirePoweredMinecart);
-        this.setKeepChunksLoaded(node.get("keepChunksLoaded", this.keepChunksLoaded));
-        this.setManualMovementAllowed(node.get("allowManualMovement", this.isManualMovementAllowed()));
-        this.setMobManualMovementAllowed(node.get("allowMobManualMovement", this.isMobManualMovementAllowed()));
-        this.waitDistance = node.get("waitDistance", this.waitDistance);
-        this.suffocation = node.get("suffocation", this.suffocation);
-        this.killMessage = node.get("killMessage", this.killMessage);
-
-        // Slowdown options for friction and gravity (and others?)
-        if (node.isNode("slowDown")) {
-            ConfigurationNode slowDownNode = node.getNode("slowDown");
-            for (SlowdownMode mode : SlowdownMode.values()) {
-                this.setSlowingDown(mode, slowDownNode.get(mode.getKey(), this.isSlowingDown(mode)));
-            }
-        } else if (node.contains("slowDown")) {
-            this.setSlowingDown(node.get("slowDown", true));
-        }
-
-        // Banking
-        if (node.isNode("banking")) {
-            ConfigurationNode banking = node.getNode("banking");
-            this.bankingStrength = banking.get("strength", this.bankingStrength);
-            this.bankingSmoothness = banking.get("smoothness", this.bankingSmoothness);
-        }
-
-        // Collision options. If specified, remove per-mob collision rules and read from the node
-        if (node.contains("collision")) {
-            this.collisionModes.clear();
-            for (CollisionConfig collisionConfigObject : CollisionConfig.values()) {
-                CollisionMode mode = node.get("collision." + collisionConfigObject.getMobType(), CollisionMode.class, null);
-                if (mode != null) {
-                    this.collisionModes.put(collisionConfigObject, mode);
-                }
-            }
-            this.playerCollision = node.get("collision.players", this.playerCollision);
-            this.miscCollision = node.get("collision.misc", this.miscCollision);
-            this.trainCollision = node.get("collision.train", this.trainCollision);
-            this.blockCollision = node.get("collision.block", this.blockCollision);
-        }
-
-        // Tickets that can be used for this train
-        if (node.contains("tickets")) {
-            this.tickets.clear();
-            for (String ticket : node.getList("tickets", String.class)) {
-                this.tickets.add(ticket);
+        // Wipe all original properties except 'carts', effectively resetting to the defaults
+        for (String key : new ArrayList<String>(this.config.getKeys())) {
+            if (!"carts".equals(key)) {
+                this.config.remove(key);
             }
         }
 
-        // Load train skip options, if it exists
-        if (node.isNode("skipOptions")) {
-            this.skipOptions.load(node.getNode("skipOptions"));
+        // Deep-copy input train configuration to train configuration, skip 'carts'
+        node.cloneIntoExcept(this.config, Collections.singleton("carts"));
+
+        // Reload properties
+        onConfigurationChanged(false);
+    }
+
+    @Override
+    public void save(ConfigurationNode node) {
+        saveToConfig().cloneInto(node);
+    }
+
+    protected void onConfigurationChanged(boolean cartsChanged) {
+        // Refresh registered IProperties
+        // All below should eventually become IProperties, which is when this function
+        // can be removed!
+        for (IProperty<?> property : IPropertyRegistry.instance().all()) {
+            property.onConfigurationChanged(this);
         }
 
-        // These properties are purely saved so they are written correctly when saving defaults
-        // There are not meant to be read anywhere, because these exist as part of minecart metadata
-        // Only read these when actually set, don't add them using get's default if not so
-        // We don't want
-        if (node.contains("blockTypes") || node.contains("blockOffset")) {
-            this.blockTypes = node.get("blockTypes", this.blockTypes);
-            this.blockOffset = node.get("blockOffset", this.blockOffset);
+        // TODO: Replace all below with IProperty objects
+        // Note: completely disregards all previous configuration!
 
-            // Apply block types / block height to the actual minecart, if set
-            if (!this.blockTypes.isEmpty() || this.blockOffset != SignActionBlockChanger.BLOCK_OFFSET_NONE) {
-                MinecartGroup group = this.getHolder();
-                if (group != null) {
-                    if (this.blockTypes.isEmpty()) {
-                        SignActionBlockChanger.setBlocks(group, new ItemParser[0], this.blockOffset);
-                    } else {
-                        SignActionBlockChanger.setBlocks(group, this.blockTypes, this.blockOffset);
-                    }
-                }
-            }
-        }
-
-        // Load individual carts (by name)
-        if (node.isNode("carts")) {
-            for (ConfigurationNode cart : node.getNode("carts").getNodes()) {
-                try {
-                    CartProperties prop = CartPropertiesStore.get(UUID.fromString(cart.getName()), this);
-                    this.add(prop);
-                    prop.load(cart);
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
+        // Also refresh carts
+        if (cartsChanged) {
+            for (CartProperties cart : this) {
+                cart.onConfigurationChanged();
             }
         }
     }
 
     /**
-     * Loads the properties from the TrainProperties source specified<br>
-     * Cart properties are not transferred or cleared!
-     * This is used when splitting the properties of one train into two.
-     *
-     * @param source to load from
+     * Forces all properties to be saved to the {@link #getConfig()}.
+     * Note: this will be removed once all properties are
+     * part of IProperties! Then they are all live-updated and this
+     * method is no longer needed.
+     * 
+     * @return saved {@link #getConfig()}
      */
-    public void load(TrainProperties source) {
-        this.soundEnabled = source.soundEnabled;
-        this.displayName = source.displayName;
-        this.collision = source.collision;
-        this.slowDownOptions.clear();
-        this.slowDownOptions.addAll(source.slowDownOptions);
-        this.collisionModes.clear();
-        this.collisionModes.putAll(source.collisionModes);
-        this.playerCollision = source.playerCollision;
-        this.miscCollision = source.miscCollision;
-        this.trainCollision = source.trainCollision;
-        this.blockCollision = source.blockCollision;
-        this.setCollisionDamage(source.collisionDamage);
-        this.speedLimit = source.speedLimit;
-        this.gravity = source.gravity;
-        this.requirePoweredMinecart = source.requirePoweredMinecart;
-        this.setKeepChunksLoaded(source.keepChunksLoaded);
-        this.allowPlayerManualMovement = source.allowPlayerManualMovement;
-        this.allowMobManualMovement = source.allowMobManualMovement;
-        this.tickets.clear();
-        this.tickets.addAll(source.tickets);
-        this.skipOptions.load(source.skipOptions, true);
-        this.blockTypes = source.blockTypes;
-        this.blockOffset = source.blockOffset;
-        this.waitDistance = source.waitDistance;
-        this.bankingStrength = source.bankingStrength;
-        this.bankingSmoothness = source.bankingSmoothness;
-        this.suffocation = source.suffocation;
-        this.killMessage = source.killMessage;
+    public ConfigurationNode saveToConfig() {
+        // Save carts too!
+        for (CartProperties cProp : this) {
+            cProp.saveToConfig();
+        }
+
+        return config;
     }
 
-    @Override
-    public void saveAsDefault(ConfigurationNode node) {
-        node.set("soundEnabled", this.soundEnabled);
-        node.set("displayName", this.displayName);
-        node.set("allowPlayerTake", this.allowPlayerTake);
-        node.set("requirePoweredMinecart", this.requirePoweredMinecart);
-        node.set("trainCollision", this.collision);
-        node.set("collisionDamage", this.getCollisionDamage());
-        node.set("keepChunksLoaded", this.keepChunksLoaded);
-        node.set("speedLimit", this.speedLimit);
-        node.set("gravity", this.gravity);
-        node.set("waitDistance", this.waitDistance);
-        node.set("suffocation", this.suffocation);
-        node.set("killMessage", this.killMessage);
+    /**
+     * Applies all of the configuration options defined in a configuration
+     * node to this train and this train's carts. For every cart property
+     * the property is updated for all the carts of this train. If a property
+     * isn't stored in the configuration, the original value of this train
+     * is preserved.
+     * 
+     * @param node Configuration node to apply to this train and carts
+     */
+    public void apply(ConfigurationNode node) {
+        if (node == null) {
+            return;
+        }
 
-        ConfigurationNode banking = node.getNode("banking");
-        banking.set("strength", this.bankingStrength);
-        banking.set("smoothness", this.bankingSmoothness);
-
-        if (this.isSlowingDownAll()) {
-            node.set("slowDown", true);
-        } else if (this.isSlowingDownNone()) {
-            node.set("slowDown", false);
-        } else {
-            ConfigurationNode slowdownNode = node.getNode("slowDown");
-            for (SlowdownMode mode : SlowdownMode.values()) {
-                slowdownNode.set(mode.getKey(), this.isSlowingDown(mode));
+        // Read all properties TrainCarts knows about from the configuration
+        // This will read and apply both train and cart properties
+        for (IProperty<Object> property : IPropertyRegistry.instance().all()) {
+            Optional<Object> value = property.readFromConfig(node);
+            if (value.isPresent()) {
+                this.set(property, value.get());
             }
         }
 
-        node.set("allowManualMovement", this.isManualMovementAllowed());
-        node.set("allowMobManualMovement", this.isMobManualMovementAllowed());
-        node.set("tickets", StringUtil.EMPTY_ARRAY);
-        node.set("collision.players", this.playerCollision);
-        node.set("collision.misc", this.miscCollision);
-        node.set("collision.train", this.trainCollision);
-        node.set("collision.block", this.blockCollision);
-        node.set("blockTypes", (this.blockTypes == null) ? "" : this.blockTypes);
-        node.set("blockOffset", (this.blockOffset == SignActionBlockChanger.BLOCK_OFFSET_NONE) ? "unset" : this.blockOffset);
+        // These are legacy so that block offset / displayed blocks can be set using defaults
+        // These properties are purely saved so they are written correctly when saving defaults
+        // There are not meant to be read anywhere, because these exist as part of minecart metadata
+        // Only read these when actually set, don't add them using get's default if not so
+        // We don't want
+        if (node.contains("blockTypes") || node.contains("blockOffset")) {
+            String blockTypes = node.get("blockTypes", "");
+            int blockOffset = node.get("blockOffset", SignActionBlockChanger.BLOCK_OFFSET_NONE);
+
+            // Apply block types / block height to the actual minecart, if set
+            if (!blockTypes.isEmpty() || blockOffset != SignActionBlockChanger.BLOCK_OFFSET_NONE) {
+                MinecartGroup group = this.getHolder();
+                if (group != null) {
+                    if (blockTypes.isEmpty()) {
+                        SignActionBlockChanger.setBlocks(group, new ItemParser[0], blockOffset);
+                    } else {
+                        SignActionBlockChanger.setBlocks(group, blockTypes, blockOffset);
+                    }
+                }
+            }
+        }
+
+        // Fire onPropertiesChanged, if possible
+        this.tryUpdate();
         for (CartProperties prop : this) {
-            prop.saveAsDefault(node);
-            break;
+            prop.tryUpdate();
         }
-    }
-
-    @Override
-    public void save(ConfigurationNode node) {
-        node.set("displayName", this.displayName.equals(this.trainname) ? null : this.displayName);
-        node.set("soundEnabled", this.soundEnabled ? null : false);
-        node.set("allowPlayerTake", this.allowPlayerTake ? true : null);
-        node.set("requirePoweredMinecart", this.requirePoweredMinecart ? true : null);
-        node.set("trainCollision", this.collision ? null : false);
-        node.set("collisionDamage", this.getCollisionDamage());
-        node.set("keepChunksLoaded", this.keepChunksLoaded ? true : null);
-        node.set("speedLimit", this.speedLimit != 0.4 ? this.speedLimit : null);
-        node.set("gravity", this.gravity != 1.0 ? this.gravity : null);
-        node.set("waitDistance", (this.waitDistance > 0) ? this.waitDistance : null);
-        node.set("suffocation", this.suffocation ? null : false);
-        node.set("killMessage", this.killMessage.isEmpty() ? null : this.killMessage);
-
-        if (this.bankingStrength != 0.0 || this.bankingSmoothness != 10.0) {
-            ConfigurationNode banking = node.getNode("banking");
-            banking.set("strength", this.bankingStrength != 0.0 ? this.bankingStrength : null);
-            banking.set("smoothness", this.bankingSmoothness != 10.0 ? this.bankingSmoothness : null);
-        } else {
-            node.remove("banking");
-        }
-
-        if (this.isSlowingDownAll()) {
-            node.remove("slowDown");
-        } else if (this.isSlowingDownNone()) {
-            node.set("slowDown", false);
-        } else {
-            ConfigurationNode slowdownNode = node.getNode("slowDown");
-            for (SlowdownMode mode : SlowdownMode.values()) {
-                slowdownNode.set(mode.getKey(), this.isSlowingDown(mode));
-            }
-        }
-
-        node.set("allowManualMovement", this.isManualMovementAllowed() ? true : null);
-        node.set("allowMobManualMovement", this.isMobManualMovementAllowed() ? true : null);
-        node.set("tickets", LogicUtil.toArray(this.tickets, String.class));
-        for (CollisionConfig collisionConfigObject : CollisionConfig.values()) {
-            CollisionMode value = this.collisionModes.get(collisionConfigObject);
-            if (collisionConfigObject.isAddToConfigFile() || value != null) {
-                node.set("collision." + collisionConfigObject.getMobType(), value != null ? value : CollisionMode.DEFAULT);
-            }
-        }
-        if (this.playerCollision != CollisionMode.DEFAULT) {
-            node.set("collision.players", this.playerCollision);
-        }
-        if (this.miscCollision != CollisionMode.DEFAULT) {
-            node.set("collision.misc", this.miscCollision);
-        }
-        if (this.trainCollision != CollisionMode.LINK) {
-            node.set("collision.train", this.trainCollision);
-        }
-        if (this.blockCollision != CollisionMode.DEFAULT) {
-            node.set("collision.block", this.blockCollision);
-        }
-        if (!this.isEmpty()) {
-            ConfigurationNode carts = node.getNode("carts");
-            for (CartProperties prop : this) {
-                ConfigurationNode cart = carts.getNode(prop.getUUID().toString());
-                prop.save(cart);
-                if (cart.getKeys().isEmpty()) carts.remove(cart.getName());
-            }
-        }
-
-        if (this.skipOptions.isActive()) {
-            this.skipOptions.save(node.getNode("skipOptions"));
-        } else if (node.contains("skipOptions")) {
-            node.remove("skipOptions");
-        }
-    }
-
-    public double getCollisionDamage() {
-        return this.collisionDamage;
-    }
-
-    public void setCollisionDamage(double collisionDamage) {
-        this.collisionDamage = collisionDamage;
     }
 }

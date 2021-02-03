@@ -1,6 +1,5 @@
 package com.bergerkiller.bukkit.tc.signactions;
 
-import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.tc.Direction;
 import com.bergerkiller.bukkit.tc.Permission;
 import com.bergerkiller.bukkit.tc.TCConfig;
@@ -26,7 +25,7 @@ public class SignActionLauncher extends SignAction {
             return;
         }
         // Parse the launch speed
-        double velocity = ParseUtil.parseDouble(info.getLine(2), TCConfig.launchForce);
+        double velocity = Util.parseVelocity(info.getLine(2), TCConfig.launchForce);
 
         // When prefixed with + or - the speed should be added on top of the current speed of the train
         boolean addToRealSpeed = (info.getLine(2).startsWith("+") || info.getLine(2).startsWith("-"));
@@ -47,16 +46,16 @@ public class SignActionLauncher extends SignAction {
                 }
 
                 BlockFace cartDirection = group.head().getDirection();
-                BlockFace directionFace = direction.getDirection(cartDirection, cartDirection);
+                BlockFace directionFace = direction.getDirectionLegacy(cartDirection, cartDirection);
                 group.getActions().clear();
                 group.head().getActions().addActionLaunch(directionFace, launchConfig, launchVelocity);
             }
         } else if (info.hasRailedMember()) {
             // Parse the direction to launch into
-            BlockFace direction = Direction.parse(info.getLine(3)).getDirection(info.getFacing(), info.getCartEnterFace());
+            BlockFace direction = Direction.parse(info.getLine(3)).getDirectionLegacy(info.getFacing(), info.getCartEnterFace());
 
             // Calculate the launch distance if left empty
-            if (!launchConfig.hasDistance() && !launchConfig.hasDuration()) {
+            if (!launchConfig.isValid()) {
                 launchConfig.setDistance(Util.calculateStraightLength(info.getRails(), direction));
             }
 
@@ -100,7 +99,7 @@ public class SignActionLauncher extends SignAction {
                 .setPermission(Permission.BUILD_LAUNCHER)
                 .setName("launcher")
                 .setDescription("launch (or brake) trains at a desired speed")
-                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs/Launcher")
+                .setTraincartsWIKIHelp("TrainCarts/Signs/Launcher")
                 .handle(event.getPlayer());
     }
 }

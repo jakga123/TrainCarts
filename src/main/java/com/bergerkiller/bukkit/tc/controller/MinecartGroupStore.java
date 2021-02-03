@@ -2,6 +2,7 @@ package com.bergerkiller.bukkit.tc.controller;
 
 import com.bergerkiller.bukkit.common.collections.ImplicitlySharedSet;
 import com.bergerkiller.bukkit.tc.LCTManual;
+import com.bergerkiller.bukkit.common.utils.StreamUtil;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.Util;
@@ -10,6 +11,8 @@ import com.bergerkiller.bukkit.tc.controller.spawnable.SpawnableMember;
 import com.bergerkiller.bukkit.tc.events.GroupCreateEvent;
 import com.bergerkiller.bukkit.tc.events.GroupLinkEvent;
 import com.bergerkiller.bukkit.tc.properties.TrainProperties;
+import com.bergerkiller.bukkit.tc.properties.TrainPropertiesStore;
+
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -88,38 +91,73 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
         // There is not a group with this name already?
         MinecartGroup g = new MinecartGroup();
         if (name != null) {
-            g.setProperties(TrainProperties.get(name));
+            g.setProperties(TrainPropertiesStore.get(name));
         }
-        for (MinecartMember<?> member : members) {
-            if (member != null && member.getEntity() != null && !member.getEntity().isDead()) {
-                member.setUnloaded(false);
-                g.add(member);
-            }
-        }
-        g.updateDirection();
-        g.getAverageForce();
-        groups.add(g);
-        GroupCreateEvent.call(g);
-        g.onGroupCreated();
+        addMembersAndFinalize(g, members);
         return g;
     }
 
+    /**
+     * Creates a new group that recently split from another group. The properties of the
+     * original group are applied to the newly created group. The name is based off of
+     * the original group's. name.
+     * 
+     * @param properties The properties to clone and base a split name off of
+     * @param members The members of the new group
+     * @return new group
+     */
+    public static MinecartGroup createSplitFrom(TrainProperties properties, MinecartMember<?>... members) {
+        Util.checkMainThread("MinecartGroupStore::createSplitFrom(from, members)");
+
+        // Create new group and assign it the properties of a split group
+        MinecartGroup g = new MinecartGroup();
+        g.setProperties(TrainPropertiesStore.createSplitFrom(properties));
+        addMembersAndFinalize(g, members);
+        g.getSignTracker().refresh();
+        return g;
+    }
+
+    private static void addMembersAndFinalize(MinecartGroup group, MinecartMember<?>... members) {
+        for (MinecartMember<?> member : members) {
+            if (member != null && member.getEntity() != null && !member.getEntity().isDead()) {
+                member.setUnloaded(false);
+                group.add(member);
+            }
+        }
+        group.updateDirection();
+        group.getAverageForce();
+        groups.add(group);
+        GroupCreateEvent.call(group);
+        group.onGroupCreated();
+    }
+
     public static MinecartGroup spawn(SpawnableGroup spawnableGroup, List<Location> spawnLocations) {
-        List<SpawnableMember> types = spawnableGroup.getMembers();
-        if (types.size() > spawnLocations.size()) {
+        List<SpawnableMember> members = spawnableGroup.getMembers();
+        if (members.size() > spawnLocations.size()) {
             return null;
         }
 
+        // Convert to a SpawnLocationList and do all the spawn logic there
+        SpawnableGroup.SpawnLocationList locations = new SpawnableGroup.SpawnLocationList();
+        for (int i = 0; i < members.size(); i++) {
+            Location loc = spawnLocations.get(i);
+            locations.addMember(members.get(i), loc.getDirection(), loc);
+        }
+        return spawn(spawnableGroup, locations);
+    }
+
+    public static MinecartGroup spawn(SpawnableGroup spawnableGroup, SpawnableGroup.SpawnLocationList locations) {
         MinecartGroup group = new MinecartGroup();
         groups.add(group);
-        for (int i = spawnLocations.size() - 1; i >= 0; i--) {
-            Location spawnLoc = spawnLocations.get(i);
-            if (types.get(i).isFlipped()) {
+        for (int i = locations.locations.size() - 1; i >= 0; i--) {
+            SpawnableMember.SpawnLocation loc = locations.locations.get(i);
+            Location spawnLoc = loc.location;
+            if (loc.member.isFlipped()) {
                 spawnLoc = Util.invertRotation(spawnLoc);
             }
 
             // Spawn the minecart
-            group.add(types.get(i).spawn(spawnLoc));
+            group.add(loc.member.spawn(spawnLoc));
         }
         group.updateDirection();
         group.getProperties().load(spawnableGroup.getConfig());
@@ -145,21 +183,13 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
      * Finds all the Minecart Groups that match the name with the expression given
      *
      * @param expression to match to
-     * @return a Collection of MinecartGroup that match
+     * @return a Collection of MinecartGroup that match (unmodifiable)
      */
     public static Collection<MinecartGroup> matchAll(String expression) {
-        List<MinecartGroup> rval = new ArrayList<>();
-        if (expression != null && !expression.isEmpty()) {
-            String[] elements = expression.split("\\*");
-            boolean first = expression.startsWith("*");
-            boolean last = expression.endsWith("*");
-            for (MinecartGroup group : groups) {
-                if (group.getProperties().matchName(elements, first, last)) {
-                    rval.add(group);
-                }
-            }
-        }
-        return rval;
+        return TrainPropertiesStore.matchAll(expression).stream()
+                .map(TrainProperties::getHolder)
+                .filter(Objects::nonNull)
+                .collect(StreamUtil.toUnmodifiableList());
     }
 
     /**
@@ -175,13 +205,6 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
     public static MinecartGroup get(Entity e) {
         final MinecartMember<?> mm = MinecartMemberStore.getFromEntity(e);
         return mm == null ? null : mm.getGroup();
-    }
-
-    public static MinecartGroup get(TrainProperties prop) {
-        for (MinecartGroup group : groups) {
-            if (group.isPropertiesEqual(prop)) return group;
-        }
-        return null;
     }
 
     public static boolean link(MinecartMember<?> m1, MinecartMember<?> m2) {
@@ -200,7 +223,7 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
             TrainProperties prop2 = g2.getProperties();
 
             //Is a powered minecart required?
-            if (prop1.requirePoweredMinecart || prop2.requirePoweredMinecart) {
+            if (prop1.isPoweredMinecartRequired() || prop2.isPoweredMinecartRequired()) {
                 if (g1.size(EntityType.MINECART_FURNACE) == 0 && g2.size(EntityType.MINECART_FURNACE) == 0) {
                     return false;
                 }

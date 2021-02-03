@@ -51,7 +51,7 @@ public class SignActionBlocker extends SignAction {
                     Direction direction = Direction.parse(info.getLine(3));
                     if (direction != Direction.NONE) {
                         long delay = ParseUtil.parseTime(info.getLine(2));
-                        BlockFace trainDirection = direction.getDirection(info.getFacing(), info.getCartEnterFace());
+                        BlockFace trainDirection = direction.getDirectionLegacy(info.getFacing(), info.getCartEnterFace());
                         info.getGroup().getActions().clear();
                         info.getGroup().getActions().addActionWaitState();
                         if (delay > 0) {
@@ -82,7 +82,7 @@ public class SignActionBlocker extends SignAction {
                 .setPermission(Permission.BUILD_BLOCKER)
                 .setName("train blocker")
                 .setDescription("block trains coming from a certain direction")
-                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs/Blocker")
+                .setTraincartsWIKIHelp("TrainCarts/Signs/Blocker")
                 .handle(event.getPlayer());
     }
 }

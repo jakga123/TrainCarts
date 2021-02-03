@@ -429,7 +429,10 @@ public abstract class RailType {
     }
 
     /**
-     * Switches the rails from one junction to another. Junctions are used from {@link #getJunctions(railBlock)}.
+     * Switches the rails from one junction to another. Junctions are used from {@link #getJunctions(railBlock)}.<br>
+     * <br>
+     * This should be implemented by RailType implementations to switch junctions. It should not be called,
+     * for that use {@link RailPiece#switchJunction(RailJunction, RailJunction)} instead.
      * 
      * @param railBlock where this Rail Type is at
      * @param from junction
@@ -493,13 +496,12 @@ public abstract class RailType {
 
     /**
      * Obtains the Rail Logic to use for the Minecart at the (previously calculated) rail position in a World.
-     * <br>
-     * <b>Deprecated: use {@link #getLogic(RailLogicState)} instead.</b>
      *
      * @param member to get the logic for (can be null when used by track walkers for e.g. spawning)
      * @param railsBlock the Minecart is driving on
      * @param direction in which the Minecart is moving. Only block directions (north/east/south/west/up/down) are used.
      * @return Rail Logic
+     * @deprecated Use {@link #getLogic(RailState)} instead.
      */
     @Deprecated
     public RailLogic getLogic(MinecartMember<?> member, Block railsBlock, BlockFace direction) {

@@ -3,8 +3,11 @@ package com.bergerkiller.bukkit.tc.utils;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
+import com.bergerkiller.bukkit.common.permissions.IPermissionEnum;
 import com.bergerkiller.bukkit.common.permissions.PermissionEnum;
+import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.wrappers.ChatText;
+import com.bergerkiller.bukkit.tc.Localization;
 
 /**
  * Stores parameters important when handling the event of a player placing down a sign.
@@ -12,7 +15,7 @@ import com.bergerkiller.bukkit.common.wrappers.ChatText;
  * called to handle everything.
  */
 public class SignBuildOptions {
-    private PermissionEnum permission = null;
+    private String permission = null;
     private String name = null;
     private String helpURL = null;
     private String helpAlt = null;
@@ -24,11 +27,34 @@ public class SignBuildOptions {
     /**
      * Sets a required permission for building the sign
      * 
-     * @param permission
+     * @param permission Permission using the PermissionEnum BKCommonLib API.
+     *                   Specify null to not check any permissions.
      * @return this
      */
     public SignBuildOptions setPermission(PermissionEnum permission) {
-        this.permission = permission;
+        return setPermission((permission == null) ? null : permission.getName());
+    }
+
+    /**
+     * Sets a required permission for building the sign
+     * 
+     * @param permission Permission using the IPermissionEnum BKCommonLib API.
+     *                   Specify null to not check any permissions.
+     * @return this
+     */
+    public SignBuildOptions setPermission(IPermissionEnum permission) {
+        return setPermission((permission == null) ? null : permission.getName());
+    }
+
+    /**
+     * Sets a required permission for building the sign
+     * 
+     * @param permissionNode Permission node to check.
+     *                       Specify null to not check any permissions.
+     * @return this
+     */
+    public SignBuildOptions setPermission(String permissionNode) {
+        this.permission = permissionNode;
         return this;
     }
 
@@ -52,6 +78,18 @@ public class SignBuildOptions {
     public SignBuildOptions setDescription(String description) {
         this.description = description;
         return this;
+    }
+
+    /**
+     * Calls {@link #setHelpURL(url, alt)} with information about a page
+     * on the Traincarts Wiki.
+     * 
+     * @param page Path on the wiki where the information is located
+     * @return this
+     */
+    public SignBuildOptions setTraincartsWIKIHelp(String page) {
+        return setHelpURL("https://wiki.traincarts.net/index.php/" + page,
+                "Click here to visit the Traincarts WIKI for help with this sign");
     }
 
     /**
@@ -100,7 +138,8 @@ public class SignBuildOptions {
      */
     public boolean handle(Player player) {
         // Permission
-        if (permission != null && !permission.handleMsg(player, ChatColor.RED + "You do not have permission to use this sign")) {
+        if (permission != null && !CommonUtil.hasPermission(player, this.permission)) {
+            Localization.SIGN_NO_PERMISSION.message(player);
             return false;
         }
 

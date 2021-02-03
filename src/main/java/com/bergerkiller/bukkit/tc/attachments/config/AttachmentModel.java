@@ -2,6 +2,7 @@ package com.bergerkiller.bukkit.tc.attachments.config;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -13,11 +14,10 @@ import com.bergerkiller.bukkit.tc.attachments.api.AttachmentTypeRegistry;
 import com.bergerkiller.bukkit.tc.attachments.control.CartAttachmentEntity;
 import com.bergerkiller.bukkit.tc.attachments.control.CartAttachmentModel;
 import com.bergerkiller.bukkit.tc.attachments.control.CartAttachmentSeat;
-import com.bergerkiller.bukkit.tc.properties.TrainPropertiesStore;
 
 public class AttachmentModel {
     private final AttachmentTypeRegistry registry;
-    private ConfigurationNode config;
+    private final ConfigurationNode config;
     private List<AttachmentModelOwner> owners = new ArrayList<AttachmentModelOwner>();
     private int seatCount;
     private float cartLength;
@@ -155,7 +155,7 @@ public class AttachmentModel {
      * @param notify True to not notify the changes, False for a silent update
      */
     public void update(ConfigurationNode newConfig, boolean notify) {
-        this.config = newConfig;
+        this.config.setTo(newConfig);
         this.onConfigChanged(notify);
 
         //TODO: Tell save scheduler we can re-save models.yml
@@ -192,16 +192,8 @@ public class AttachmentModel {
                 return; // invalid path
             }
         }
-        for (String key : newConfig.getKeys()) {
-            if (!key.equals("attachments")) {
-                changedNode.set(key, newConfig.get(key));
-            }
-        }
-        for (String oldKey : new ArrayList<String>(changedNode.getKeys())) {
-            if (!newConfig.contains(oldKey) && !oldKey.equals("attachments")) {
-                changedNode.remove(oldKey);
-            }
-        }
+
+        changedNode.setToExcept(newConfig, Collections.singletonList("attachments"));
         this.onConfigNodeChanged(targetPath, changedNode, notify);
     }
 
@@ -233,10 +225,9 @@ public class AttachmentModel {
         this.wheelDistance = physical.get("wheelDistance", 0.0);
     }
 
-    private void onConfigChanged(boolean notify) {
+    protected void onConfigChanged(boolean notify) {
         this._isDefault = false; // Was changed; no longer default!
         this.computeProperties();
-        TrainPropertiesStore.markForAutosave(); // hack!
         if (notify) {
             for (AttachmentModelOwner owner : new ArrayList<AttachmentModelOwner>(this.owners)) {
                 owner.onModelChanged(this);
@@ -244,9 +235,8 @@ public class AttachmentModel {
         }
     }
 
-    private void onConfigNodeChanged(int[] targetPath, ConfigurationNode config, boolean notify) {
+    protected void onConfigNodeChanged(int[] targetPath, ConfigurationNode config, boolean notify) {
         this._isDefault = false; // Was changed; no longer default!
-        TrainPropertiesStore.markForAutosave(); // hack!
         if (notify) {
             for (AttachmentModelOwner owner : new ArrayList<AttachmentModelOwner>(this.owners)) {
                 owner.onModelNodeChanged(this, targetPath, config);

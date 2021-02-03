@@ -72,7 +72,7 @@ public class SignActionAnimate extends SignAction {
                 .setDescription(event.isRCSign() ?
                         "play train model animations remotely" :
                         "play train model animations")
-                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs/Animate")
+                .setTraincartsWIKIHelp("TrainCarts/Signs/Animate")
                 .handle(event.getPlayer());
     }
 

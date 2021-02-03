@@ -26,21 +26,25 @@ public class MinecartMemberMobSpawner extends MinecartMember<CommonMinecartMobSp
         return getEntity().getMobSpawner();
     }
 
-    @Override
-    public boolean parseSet(String key, String args) {
-        if (super.parseSet(key, args)) {
-            return true;
-        }
-        if (LogicUtil.contains(key, "mobtype")) {
-            if (Util.isValidEntity(args)) {
-                getSpawner().setMobName(args);
+    /**
+     * TODO: This is no longer being called from anywhere
+     * Maybe a sign specifically for configuring stuff like this?
+     * 
+     * @param name
+     * @param input
+     * @return
+     */
+    public boolean parseAndSet(String name, String input) {
+        if (LogicUtil.contains(name, "mobtype")) {
+            if (Util.isValidEntity(input)) {
+                getSpawner().setMobName(input);
             }
-        } else if (LogicUtil.contains(key, "delay", "minspawndelay")) {
-            getSpawner().setSpawnDelay(ParseUtil.parseInt(args, getSpawner().getSpawnDelay()));
-        } else if (LogicUtil.contains(key, "mindelay", "minspawndelay")) {
-            getSpawner().setMinSpawnDelay(ParseUtil.parseInt(args, getSpawner().getMinSpawnDelay()));
-        } else if (LogicUtil.contains(key, "maxdelay", "maxspawndelay")) {
-            getSpawner().setMaxSpawnDelay(ParseUtil.parseInt(args, getSpawner().getMaxSpawnDelay()));
+        } else if (LogicUtil.contains(name, "delay", "minspawndelay")) {
+            getSpawner().setSpawnDelay(ParseUtil.parseInt(input, getSpawner().getSpawnDelay()));
+        } else if (LogicUtil.contains(name, "mindelay", "minspawndelay")) {
+            getSpawner().setMinSpawnDelay(ParseUtil.parseInt(input, getSpawner().getMinSpawnDelay()));
+        } else if (LogicUtil.contains(name, "maxdelay", "maxspawndelay")) {
+            getSpawner().setMaxSpawnDelay(ParseUtil.parseInt(input, getSpawner().getMaxSpawnDelay()));
         } else {
             return false;
         }

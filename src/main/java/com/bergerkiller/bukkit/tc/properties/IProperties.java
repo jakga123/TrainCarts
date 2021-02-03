@@ -2,16 +2,101 @@ package com.bergerkiller.bukkit.tc.properties;
 
 import com.bergerkiller.bukkit.common.BlockLocation;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
+import com.bergerkiller.bukkit.tc.properties.api.IProperty;
+import com.bergerkiller.bukkit.tc.properties.api.IPropertyRegistry;
+import com.bergerkiller.bukkit.tc.properties.api.PropertyParseResult;
+
 import org.bukkit.entity.Player;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Contains train or cart property getters and setters
  */
 public interface IProperties extends IParsable {
+
+    /**
+     * Gets a single property stored in this collection of properties
+     * 
+     * @param <T> Type of value the property has
+     * @param property The property to read
+     * @return Value of the property
+     */
+    <T> T get(IProperty<T> property);
+
+    /**
+     * Updates a single property stored in this collection of properties
+     * 
+     * @param <T> Type of value the property has
+     * @param property The property to update
+     * @param value The new value to assign for this property
+     */
+    <T> void set(IProperty<T> property, T value);
+
+    /**
+     * Uses a function to modify the value of a property in this
+     * collection of properties
+     * 
+     * @param <T> Type of value the property has
+     * @param property The property to update
+     * @param operation The operation to perform on the current value
+     * @return updated value, result of calling the operation function
+     */
+    default <T> T update(IProperty<T> property, Function<T, T> operation) {
+        T old_value = get(property);
+        T new_value = operation.apply(old_value);
+        if (old_value != new_value) {
+            set(property, new_value);
+        }
+        return new_value;
+    }
+
+    /**
+     * Parses the property by name and attempts to parse the property. If successful,
+     * applies the parsed value to these properties.
+     * 
+     * @param <T> Type of value the property has
+     * @param name Name of the property to parse
+     * @param input Input value to parse
+     * @return Result of parsing, if not successful, the property will not have been set.
+     *         Is never null, if parsing fails the {@link PropertyParseResult#getReason()}
+     *         can be checked.
+     */
+    default PropertyParseResult<?> parseAndSet(String name, String input) {
+        return IPropertyRegistry.instance().parseAndSet(this, name, input);
+    }
+
+    /**
+     * Gets the YAML configuration that stores all these
+     * properties. The returned value can be directly modified,
+     * and any changes will be reflected in the train.<br>
+     * <br>
+     * To prevent de-synchronization, please use {@link #set(IProperty, Object)}
+     * or other setters to make modifications.
+     * 
+     * @return configuration
+     */
+    ConfigurationNode getConfig();
+
+    /**
+     * Loads the information from the Configuration Node specified.
+     * All previous properties are lost, and everything is reloaded.
+     *
+     * @param node Configuration node to load from
+     */
+    void load(ConfigurationNode node);
+
+    /**
+     * Copies the up-to-date configuration of {@link #getConfig()}
+     * to the configuration node specified. This configuration
+     * only stores the changed properties.
+     *
+     * @param node The configuration to save to
+     */
+    void save(ConfigurationNode node);
 
     /**
      * Gets the type name (train/cart) of these properties
@@ -73,7 +158,7 @@ public interface IProperties extends IParsable {
     /**
      * Gets a Set of all player owner names (lower cased)
      *
-     * @return owners
+     * @return owners (unmodifiable and immutable)
      */
     Set<String> getOwners();
 
@@ -87,7 +172,7 @@ public interface IProperties extends IParsable {
     /**
      * Gets a Set of all permission nodes granting players ownership
      *
-     * @return owner permissions
+     * @return owner permissions (unmodifiable and immutable)
      */
     Set<String> getOwnerPermissions();
 
@@ -140,18 +225,20 @@ public interface IProperties extends IParsable {
     void setPickup(boolean pickup);
 
     /**
-     * Gets whether it can be publicly accessed
+     * Gets whether only owners of the train or cart can enter it (true),
+     * or that anyone can regardless of ownership (false).
      *
-     * @return True or False
+     * @return True when only owners can enter, or false if anyone can
      */
-    boolean isPublic();
+    boolean getCanOnlyOwnersEnter();
 
     /**
-     * Sets whether it can be publicly accessed
+     * Sets whether only owners of the train or cart can enter it (true),
+     * or that anyone can regardless of ownership (false).
      *
-     * @param state to set to
+     * @param state Whether only owners can enter
      */
-    void setPublic(boolean state);
+    void setCanOnlyOwnersEnter(boolean state);
 
     /**
      * Gets whether players can enter
@@ -316,29 +403,6 @@ public interface IProperties extends IParsable {
      * @return Block location of the minecart
      */
     BlockLocation getLocation();
-
-    /**
-     * Loads the information from the Configuration Node specified
-     *
-     * @param node to use
-     */
-    void load(ConfigurationNode node);
-
-    /**
-     * Saves the information to the Configuration Node specified as a means of default<br>
-     * The full information is written
-     *
-     * @param node to save to
-     */
-    void saveAsDefault(ConfigurationNode node);
-
-    /**
-     * Saves the information to the Configuration Node specified as a means of state saving<br>
-     * Only changed information is written
-     *
-     * @param node to save to
-     */
-    void save(ConfigurationNode node);
 
     /**
      * Gets the owner of these properties

@@ -2,265 +2,225 @@ package com.bergerkiller.bukkit.tc.commands;
 
 import com.bergerkiller.bukkit.common.BlockLocation;
 import com.bergerkiller.bukkit.common.MessageBuilder;
-import com.bergerkiller.bukkit.common.permissions.NoPermissionException;
 import com.bergerkiller.bukkit.common.utils.EntityUtil;
-import com.bergerkiller.bukkit.common.utils.LogicUtil;
-import com.bergerkiller.bukkit.common.utils.ParseUtil;
 import com.bergerkiller.bukkit.common.utils.StringUtil;
+import com.bergerkiller.bukkit.tc.Localization;
 import com.bergerkiller.bukkit.tc.Permission;
-import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.attachments.animation.AnimationOptions;
+import com.bergerkiller.bukkit.tc.commands.annotations.CommandRequiresPermission;
+import com.bergerkiller.bukkit.tc.commands.annotations.CommandTargetTrain;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
+import com.bergerkiller.bukkit.tc.exception.command.NoPermissionForPropertyException;
 import com.bergerkiller.bukkit.tc.properties.CartProperties;
 import com.bergerkiller.bukkit.tc.properties.CartPropertiesStore;
-import com.bergerkiller.bukkit.tc.properties.TrainPropertiesStore;
+import com.bergerkiller.bukkit.tc.properties.api.IPropertyRegistry;
+import com.bergerkiller.bukkit.tc.properties.api.PropertyParseResult;
 import com.bergerkiller.bukkit.tc.signactions.SignActionBlockChanger;
 import com.bergerkiller.bukkit.tc.storage.OfflineGroupManager;
+
+import cloud.commandframework.annotations.Argument;
+import cloud.commandframework.annotations.CommandDescription;
+import cloud.commandframework.annotations.CommandMethod;
+import cloud.commandframework.annotations.Flag;
+import cloud.commandframework.annotations.specifier.Greedy;
+
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 public class CartCommands {
 
-    public static boolean execute(Player p, CartProperties prop, String cmd, String[] args) throws NoPermissionException {
-        TrainPropertiesStore.markForAutosave();
-        if (cmd.equals("info") || cmd.equals("i")) {
-            info(p, prop);
-        } else if (cmd.equalsIgnoreCase("playerenter")) {
-            if (args.length == 1) {
-                Permission.COMMAND_PLAYERENTER.handle(p);
-                prop.setPlayersEnter(ParseUtil.parseBool(args[0]));
-            }
-            p.sendMessage(ChatColor.YELLOW + "Players can enter this minecart: " + ChatColor.WHITE + " " + prop.getPlayersEnter());
-        } else if (LogicUtil.containsIgnoreCase(cmd, "playerleave", "playerexit")) {
-            if (args.length == 1) {
-                Permission.COMMAND_PLAYEREXIT.handle(p);
-                prop.setPlayersExit(ParseUtil.parseBool(args[0]));
-            }
-            p.sendMessage(ChatColor.YELLOW + "Players can exit this minecart: " + ChatColor.WHITE + " " + prop.getPlayersExit());
-        } else if (cmd.equalsIgnoreCase("claim")) {
-            Permission.COMMAND_SETOWNERS.handle(p);
-            prop.clearOwners();
-            prop.setOwner(p, true);
-            p.sendMessage(ChatColor.YELLOW + "You claimed this minecart your own!");
-        } else if (LogicUtil.containsIgnoreCase(cmd, "addowner", "addowners")) {
-            Permission.COMMAND_SETOWNERS.handle(p);
-            if (args.length == 0) {
-                p.sendMessage(ChatColor.YELLOW + "Please specify the player names to set as owner!");
-            } else {
-                for (String owner : args) {
-                    prop.setOwner(owner.toLowerCase());
-                }
-                p.sendMessage(ChatColor.YELLOW + "You added " + ChatColor.WHITE + StringUtil.combineNames(args) + ChatColor.YELLOW + " as owners of this minecart!");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "setowner", "setowners")) {
-            Permission.COMMAND_SETOWNERS.handle(p);
-            prop.clearOwners();
-            if (args.length == 0) {
-                p.sendMessage(ChatColor.YELLOW + "All owners for this minecart have been cleared!");
-            } else {
-                for (String owner : args) {
-                    prop.setOwner(owner.toLowerCase());
-                }
-                p.sendMessage(ChatColor.YELLOW + "You set " + ChatColor.WHITE + StringUtil.combineNames(args) + ChatColor.YELLOW + " as owners of this minecart!");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "setownerperm", "setownerpermission", "setownerpermissions")) {
-            Permission.COMMAND_SETOWNERS.handle(p);
-            prop.clearOwnerPermissions();
-            if (args.length == 0) {
-                p.sendMessage(ChatColor.YELLOW + "All owner permissions for this minecart have been cleared!");
-            } else {
-                for (String ownerPerm : args) {
-                    prop.getOwnerPermissions().add(ownerPerm);
-                }
-                p.sendMessage(ChatColor.YELLOW + "You set the owner permissions " + ChatColor.WHITE + StringUtil.combineNames(args) + ChatColor.YELLOW + " for this minecart");
-                p.sendMessage(ChatColor.YELLOW + "Players that have these permission nodes are considered owners of this Minecart");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "addownerperm", "addownerpermission", "addownerpermissions")) {
-            Permission.COMMAND_SETOWNERS.handle(p);
-            if (args.length == 0) {
-                p.sendMessage(ChatColor.YELLOW + "Please specify the permission nodes to add!");
-            } else {
-                for (String ownerPerm : args) {
-                    prop.getOwnerPermissions().add(ownerPerm);
-                }
-                p.sendMessage(ChatColor.YELLOW + "You added the owner permissions " + ChatColor.WHITE + StringUtil.combineNames(args) + ChatColor.YELLOW + " to this minecart");
-                p.sendMessage(ChatColor.YELLOW + "Players that have these permission nodes are considered owners of this Minecart");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "addtags", "addtag")) {
-            Permission.COMMAND_SETTAGS.handle(p);
-            if (args.length == 0) {
-                p.sendMessage(ChatColor.RED + "You need to give at least one tag to add!");
-            } else {
-                prop.addTags(args);
-                p.sendMessage(ChatColor.YELLOW + "You added " + ChatColor.WHITE + StringUtil.combineNames(args) + ChatColor.YELLOW + " as tags for this minecart!");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "settags", "settag", "tags", "tag")) {
-            Permission.COMMAND_SETTAGS.handle(p);
-            prop.clearTags();
-            if (args.length == 0) {
-                p.sendMessage(ChatColor.YELLOW + "All tags for this minecart have been cleared!");
-            } else {
-                prop.addTags(args);
-                p.sendMessage(ChatColor.YELLOW + "You set " + ChatColor.WHITE + StringUtil.combineNames(args) + ChatColor.YELLOW + " as tags for this minecart!");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "dest", "destination")) {
-            Permission.COMMAND_SETDESTINATION.handle(p);
-            if (args.length == 0) {
-                prop.clearDestination();
-                p.sendMessage(ChatColor.YELLOW + "The destination for this minecart has been cleared!");
-            } else {
-                prop.setDestination(StringUtil.join(" ", args[0]));
-                p.sendMessage(ChatColor.YELLOW + "You set " + ChatColor.WHITE + args[0] + ChatColor.YELLOW + " as destination for this minecart!");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "remove", "destroy")) {
-            Permission.COMMAND_DESTROY.handle(p);
-            MinecartMember<?> mm = prop.getHolder();
-            if (mm == null) {
-                CartPropertiesStore.remove(prop.getUUID());
-                OfflineGroupManager.removeMember(prop.getUUID());
-            } else {
-                mm.onDie();
-            }
-            p.sendMessage(ChatColor.YELLOW + "The selected minecart has been destroyed!");
-        } else if (cmd.equalsIgnoreCase("public")) {
-            Permission.COMMAND_SETPUBLIC.handle(p);
-            if (args.length == 0) {
-                prop.setPublic(true);
-            } else {
-                prop.setPublic(ParseUtil.parseBool(args[0]));
-            }
-            p.sendMessage(ChatColor.YELLOW + "The selected minecart can be used by everyone: " + ChatColor.WHITE + prop.isPublic());
-        } else if (LogicUtil.containsIgnoreCase(cmd, "private", "locked", "lock")) {
-            Permission.COMMAND_SETPUBLIC.handle(p);
-            if (args.length == 0) {
-                prop.setPublic(false);
-            } else {
-                prop.setPublic(!ParseUtil.parseBool(args[0]));
-            }
-            p.sendMessage(ChatColor.YELLOW + "The selected minecart can only be used by you: " + ChatColor.WHITE + !prop.isPublic());
-        } else if (cmd.equalsIgnoreCase("pickup")) {
-            Permission.COMMAND_PICKUP.handle(p);
-            if (args.length == 0) {
-                prop.setPickup(true);
-            } else {
-                prop.setPickup(ParseUtil.parseBool(args[0]));
-            }
-            p.sendMessage(ChatColor.YELLOW + "The selected minecart picks up nearby items: " + ChatColor.WHITE + prop.canPickup());
-        } else if (cmd.equalsIgnoreCase("break")) {
-            Permission.COMMAND_BREAKBLOCK.handle(p);
-            if (args.length == 0) {
-                p.sendMessage(ChatColor.YELLOW + "This cart breaks: " + ChatColor.WHITE + StringUtil.combineNames(prop.getBlockBreakTypes()));
-            } else {
-                if (ParseUtil.isBool(args[0]) && !ParseUtil.parseBool(args[0])) {
-                    prop.clearBlockBreakTypes();
-                    p.sendMessage(ChatColor.YELLOW + "Block break types have been cleared!");
-                } else {
-                    boolean asBreak = true;
-                    boolean lastIsBool = ParseUtil.isBool(args[args.length - 1]);
-                    if (lastIsBool) asBreak = ParseUtil.parseBool(args[args.length - 1]);
-                    int count = lastIsBool ? args.length - 1 : args.length;
-                    Set<Material> mats = new HashSet<>();
-                    for (int i = 0; i < count; i++) {
-                        Material mat = ParseUtil.parseMaterial(args[i], null);
-                        if (mat != null) {
-                            if (Permission.COMMAND_BREAKBLOCK_ADMIN.has(p) || TrainCarts.canBreak(mat)) {
-                                mats.add(mat);
-                            } else {
-                                p.sendMessage(ChatColor.RED + "You are not allowed to make this cart break '" + mat.toString() + "'!");
-                            }
-                        }
-                    }
-                    if (mats.isEmpty()) {
-                        p.sendMessage(ChatColor.RED + "Failed to find possible and allowed block types in the list given.");
-                        return true;
-                    }
-                    if (asBreak) {
-                        prop.getBlockBreakTypes().addAll(mats);
-                        p.sendMessage(ChatColor.YELLOW + "This cart can now (also) break: " + ChatColor.WHITE + StringUtil.combineNames(mats));
-                    } else {
-                        prop.getBlockBreakTypes().removeAll(mats);
-                        p.sendMessage(ChatColor.YELLOW + "This cart can no longer break: " + ChatColor.WHITE + StringUtil.combineNames(mats));
-                    }
-                }
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "path", "route", "pathinfo")) {
-            Permission.COMMAND_PATHINFO.handle(p);
-            Commands.showPathInfo(p, prop);
-        } else if (LogicUtil.containsIgnoreCase(cmd, "teleport", "tp")) {
-            Permission.COMMAND_TELEPORT.handle(p);
-            if (!prop.restore()) {
-                p.sendMessage(ChatColor.RED + "Cart location could not be found: Cart is lost");
-            } else {
-                BlockLocation bloc = prop.getLocation();
-                World world = bloc.getWorld();
-                if (world == null) {
-                    p.sendMessage(ChatColor.RED + "Cart is on a world that is not loaded (" + bloc.world + ")");
-                } else {
-                    EntityUtil.teleport(p, new Location(world, bloc.x + 0.5, bloc.y + 0.5, bloc.z + 0.5));
-                }
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "setblock", "setblocks", "changeblock", "changeblocks", "blockchanger")) {
-            Permission.COMMAND_CHANGEBLOCK.handle(p);
-            MinecartMember<?> member = prop.getHolder();
-            if (member == null) {
-                p.sendMessage(ChatColor.RED + "The selected minecart is unloaded: we can not change it at this time!");
-            } else if (args.length == 0) {
-                member.getEntity().setBlock(Material.AIR);
-                p.sendMessage(ChatColor.YELLOW + "The selected minecart has its displayed block cleared!");
-            } else {
-                List<MinecartMember<?>> members = new ArrayList<>(1);
-                members.add(member);
-                SignActionBlockChanger.setBlocks(members, StringUtil.join(" ", args), SignActionBlockChanger.BLOCK_OFFSET_NONE);
-                p.sendMessage(ChatColor.YELLOW + "The selected minecart has its displayed block updated!");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "setblockoffset", "changeblockoffset", "blockoffset")) {
-            Permission.COMMAND_CHANGEBLOCK.handle(p);
-            MinecartMember<?> member = prop.getHolder();
-            if (member == null) {
-                p.sendMessage(ChatColor.RED + "The selected minecart is unloaded: we can not change it at this time!");
-            } else if (args.length == 0) {
-                member.getEntity().setBlockOffset(9);
-                p.sendMessage(ChatColor.YELLOW + "The selected minecart has its block offset reset!");
-            } else {
-                int offset = ParseUtil.parseInt(args[0], 9);
-                member.getEntity().setBlockOffset(offset);
-                p.sendMessage(ChatColor.YELLOW + "The selected minecart has its displayed block offset updated!");
-            }
-        } else if (LogicUtil.containsIgnoreCase(cmd, "anim", "animate", "playanimation")) {
-            Permission.COMMAND_ANIMATE.handle(p);
-            if (prop.hasHolder()) {
-                AnimationOptions opt = new AnimationOptions();
-                opt.loadCommandArgs(args);
-                if (prop.getHolder().playNamedAnimation(opt)) {
-                    p.sendMessage(opt.getCommandSuccessMessage());
-                } else {
-                    p.sendMessage(opt.getCommandFailureMessage());
-                }
-            } else {
-                p.sendMessage(ChatColor.RED + "Can not animate the minecart: it is not loaded");
-            }
-        } else if (args.length == 1 && Util.parseProperties(prop, cmd, args[0])) {
-            p.sendMessage(ChatColor.GREEN + "Property has been updated!");
-            return true;
+    @CommandTargetTrain
+    @CommandMethod("cart info|i")
+    @CommandDescription("Displays the properties of the cart")
+    private void commandInfo(
+            final CommandSender sender,
+            final CartProperties properties
+    ) {
+        info(sender, properties);
+    }
+
+    @CommandTargetTrain
+    @CommandRequiresPermission(Permission.COMMAND_DESTROY)
+    @CommandMethod("cart destroy|remove")
+    @CommandDescription("Destroys the single cart that is selected")
+    private void commandDestroy(
+            final CommandSender sender,
+            final CartProperties properties
+    ) {
+        MinecartMember<?> member = properties.getHolder();
+        if (member == null) {
+            CartPropertiesStore.remove(properties.getUUID());
+            OfflineGroupManager.removeMember(properties.getUUID());
         } else {
-            // Show help
-            if (!cmd.equalsIgnoreCase("help") && !cmd.equalsIgnoreCase("?")) {
-                p.sendMessage(ChatColor.RED + "Unknown cart command: '" + cmd + "'!");
-            }
-            help(new MessageBuilder()).send(p);
-            return true;
+            member.onDie();
         }
-        prop.tryUpdate();
-        return true;
+        sender.sendMessage(ChatColor.YELLOW + "The selected cart has been destroyed!");
+    }
+
+    @CommandTargetTrain
+    @CommandRequiresPermission(Permission.COMMAND_TELEPORT)
+    @CommandMethod("cart teleport|tp")
+    @CommandDescription("Teleports the player to where the cart is")
+    private void commandTeleport(
+            final Player player,
+            final CartProperties properties
+    ) {
+        if (!properties.restore()) {
+            player.sendMessage(ChatColor.RED + "Cart location could not be found: Train is lost");
+        } else {
+            BlockLocation bloc = properties.getLocation();
+            World world = bloc.getWorld();
+            if (world == null) {
+                player.sendMessage(ChatColor.RED + "Train is on a world that is not loaded (" + bloc.world + ")");
+            } else {
+                EntityUtil.teleport(player, new Location(world, bloc.x + 0.5, bloc.y + 0.5, bloc.z + 0.5));
+                player.sendMessage(ChatColor.YELLOW + "Teleported to cart of '" + properties.getTrainProperties().getTrainName() + "'");
+            }
+        }
+    }
+
+    @CommandTargetTrain
+    @CommandRequiresPermission(Permission.COMMAND_ANIMATE)
+    @CommandMethod("cart animate <animation_name>")
+    @CommandDescription("Plays an animation for the cart")
+    private void commandAnimate(
+            final CommandSender sender,
+            final CartProperties properties,
+            final @Argument(value="animation_name", suggestions="cartAnimationName", description="Name of the animation to play") String animationName,
+            final @Flag(value="speed", aliases="s", description="Speed of the animation, 1.0 is default") Double speed,
+            final @Flag(value="delay", aliases="d", description="Delay of the animation, 0.0 is default") Double delay,
+            final @Flag(value="loop", aliases="l", description="Loop the animation") boolean setLooping,
+            final @Flag(value="noloop", description="Disable looping the animation") boolean setNotLooping,
+            final @Flag(value="reset", aliases="r", description="Reset the animation to the beginning") boolean setReset,
+            final @Flag(value="queue", aliases="q", description="Play the animation once previous animations have finished") boolean setQueued
+    ) {
+        if (!properties.hasHolder()) {
+            sender.sendMessage(ChatColor.RED + "Can not animate the minecart: it is not loaded");
+            return;
+        }
+
+        AnimationOptions opt = new AnimationOptions();
+        opt.setName(animationName);
+        if (speed != null) opt.setSpeed(speed);
+        if (delay != null) opt.setDelay(delay);
+        if (setReset) opt.setReset(true);
+        if (setQueued) opt.setQueue(true);
+        if (setLooping) opt.setLooped(true);
+        if (setNotLooping) opt.setLooped(false);
+
+        if (properties.getHolder().playNamedAnimation(opt)) {
+            sender.sendMessage(opt.getCommandSuccessMessage());
+        } else {
+            sender.sendMessage(opt.getCommandFailureMessage());
+        }
+    }
+
+    @CommandTargetTrain
+    @CommandRequiresPermission(Permission.COMMAND_CHANGEBLOCK)
+    @CommandMethod("cart displayedblock clear")
+    @CommandDescription("Clears the displayed block in the Minecart, making it empty")
+    private void commandClearDisplayedBlock(
+            final CommandSender sender,
+            final CartProperties properties
+    ) {
+        MinecartMember<?> member = properties.getHolder();
+        if (member == null) {
+            Localization.EDIT_NOTLOADED.message(sender);
+        } else {
+            member.getEntity().setBlock(Material.AIR);
+            sender.sendMessage(ChatColor.YELLOW + "The selected minecart has its displayed block cleared!");
+        }
+    }
+
+    @CommandTargetTrain
+    @CommandRequiresPermission(Permission.COMMAND_CHANGEBLOCK)
+    @CommandMethod("cart displayedblock type <block>")
+    @CommandDescription("Sets the displayed block type in the Minecart")
+    private void commandChangeDisplayedBlock(
+            final CommandSender sender,
+            final CartProperties properties,
+            final @Argument("block") @Greedy String blockName
+    ) {
+        MinecartMember<?> member = properties.getHolder();
+        if (member == null) {
+            Localization.EDIT_NOTLOADED.message(sender);
+        } else {
+            List<MinecartMember<?>> members = new ArrayList<>(1);
+            members.add(member);
+            SignActionBlockChanger.setBlocks(members, blockName, SignActionBlockChanger.BLOCK_OFFSET_NONE);
+            sender.sendMessage(ChatColor.YELLOW + "The selected minecart has its displayed block updated!");
+        }
+    }
+
+    @CommandTargetTrain
+    @CommandRequiresPermission(Permission.COMMAND_CHANGEBLOCK)
+    @CommandMethod("cart displayedblock offset reset")
+    @CommandDescription("Resets the height offset at which a block is displayed in a Minecart to the defaults")
+    private void commandResetDisplayedBlockOffset(
+            final CommandSender sender,
+            final CartProperties properties
+    ) {
+        MinecartMember<?> member = properties.getHolder();
+        if (member == null) {
+            Localization.EDIT_NOTLOADED.message(sender);
+        } else {
+            member.getEntity().setBlockOffset(Util.getDefaultDisplayedBlockOffset());
+            sender.sendMessage(ChatColor.YELLOW + "The selected minecart has its block offset reset!");
+        }
+    }
+
+    @CommandTargetTrain
+    @CommandRequiresPermission(Permission.COMMAND_CHANGEBLOCK)
+    @CommandMethod("cart displayedblock offset <offset>")
+    @CommandDescription("Sets the height offset at which a block is displayed in a Minecart")
+    private void commandSetDisplayedBlockOffset(
+            final CommandSender sender,
+            final CartProperties properties,
+            final @Argument("offset") int offset
+    ) {
+        MinecartMember<?> member = properties.getHolder();
+        if (member == null) {
+            Localization.EDIT_NOTLOADED.message(sender);
+        } else {
+            member.getEntity().setBlockOffset(offset);
+            sender.sendMessage(ChatColor.YELLOW + "The selected minecart has its displayed block offset updated!");
+        }
+    }
+
+    @CommandTargetTrain
+    @CommandMethod("cart <property> <value>")
+    @CommandDescription("Updates the value of a property of a cart by name")
+    private void commandCart(
+              final CommandSender sender,
+              final CartProperties properties,
+              final @Argument("property") String propertyName,
+              final @Argument("value") String value
+    ) {
+        PropertyParseResult<Object> parseResult = IPropertyRegistry.instance().parseAndSet(
+                properties, propertyName, value,
+                (result) -> {
+                    if (!result.hasPermission(sender)) {
+                        throw new NoPermissionForPropertyException(result.getName());
+                    }
+                });
+
+        if (parseResult.isSuccessful()) {
+            sender.sendMessage(ChatColor.GREEN + "Property has been updated!");
+        } else {
+            sender.sendMessage(parseResult.getMessage());
+
+            if (parseResult.getReason() == PropertyParseResult.Reason.PROPERTY_NOT_FOUND) {
+                help(new MessageBuilder()).send(sender);
+            }
+        }
     }
 
     public static MessageBuilder help(MessageBuilder builder) {
@@ -272,11 +232,13 @@ public class CartCommands {
         return builder.setSeparator(null).red("]");
     }
 
-    public static void info(Player p, CartProperties prop) {
+    public static void info(CommandSender sender, CartProperties prop) {
         MessageBuilder message = new MessageBuilder();
 
+        message.yellow("UUID: ").white(prop.getUUID().toString()).newLine();
+
         //warning message not taken
-        if (!prop.hasOwners()) {
+        if (prop.hasOwners()) {
             message.newLine().yellow("Note: This minecart is not owned, claim it using /cart claim!");
         }
         message.yellow("Picks up nearby items: ").white(prop.canPickup());
@@ -295,8 +257,8 @@ public class CartCommands {
         }
 
         // Send
-        p.sendMessage(" ");
-        message.send(p);
+        sender.sendMessage(" ");
+        message.send(sender);
     }
 
 }

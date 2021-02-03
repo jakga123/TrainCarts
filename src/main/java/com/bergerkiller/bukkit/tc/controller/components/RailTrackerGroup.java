@@ -42,6 +42,18 @@ public class RailTrackerGroup extends RailTracker {
     }
 
     /**
+     * Called when the group unloads, and this group and all its Minecarts need
+     * to be unregistered from any caches.
+     */
+    public void unload() {
+        for (TrackedRail oldRail : this.rails) {
+            RailMemberCache.removeBlock(oldRail.state.railBlock(), oldRail.member);
+        }
+        this.rails.clear();
+        this.prevRails.clear();
+    }
+
+    /**
      * Removes all the tracked rails belonging to a particular minecart
      * 
      * @param member to remove all rails for
@@ -62,6 +74,21 @@ public class RailTrackerGroup extends RailTracker {
                     iter.remove();
                 }
             }
+        }
+    }
+
+    /**
+     * When the train reverses direction, this method modifies
+     * the cached rail data to reflect that. A full re-calculation
+     * is needed later.
+     */
+    public void reverseRailData() {
+        Collections.reverse(this.rails);
+
+        // Invert motion direction on the rails
+        for (TrackedRail rail : this.rails) {
+            rail.state.position().invertMotion();
+            rail.state.initEnterDirection();
         }
     }
 

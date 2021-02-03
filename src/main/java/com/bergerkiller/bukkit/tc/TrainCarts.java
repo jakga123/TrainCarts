@@ -20,8 +20,11 @@ import com.bergerkiller.bukkit.tc.attachments.control.GlowColorTeamProvider;
 import com.bergerkiller.bukkit.tc.attachments.control.SeatAttachmentMap;
 import com.bergerkiller.bukkit.tc.cache.RailMemberCache;
 import com.bergerkiller.bukkit.tc.cache.RailSignCache;
+import com.bergerkiller.bukkit.tc.chest.TrainChestListener;
 import com.bergerkiller.bukkit.tc.cache.RailPieceCache;
 import com.bergerkiller.bukkit.tc.commands.Commands;
+import com.bergerkiller.bukkit.tc.commands.selector.SelectorHandlerRegistry;
+import com.bergerkiller.bukkit.tc.commands.selector.TCSelectorHandlerRegistry;
 import com.bergerkiller.bukkit.tc.controller.*;
 import com.bergerkiller.bukkit.tc.detector.DetectorRegion;
 import com.bergerkiller.bukkit.tc.itemanimation.ItemAnimation;
@@ -30,6 +33,9 @@ import com.bergerkiller.bukkit.tc.pathfinding.RouteManager;
 import com.bergerkiller.bukkit.tc.portals.TCPortalManager;
 import com.bergerkiller.bukkit.tc.properties.SavedTrainPropertiesStore;
 import com.bergerkiller.bukkit.tc.properties.TrainProperties;
+import com.bergerkiller.bukkit.tc.properties.api.IPropertyRegistry;
+import com.bergerkiller.bukkit.tc.properties.registry.TCPropertyRegistry;
+import com.bergerkiller.bukkit.tc.properties.standard.StandardProperties;
 import com.bergerkiller.bukkit.tc.signactions.SignAction;
 import com.bergerkiller.bukkit.tc.signactions.SignActionDetector;
 import com.bergerkiller.bukkit.tc.signactions.SignActionSpawn;
@@ -67,6 +73,7 @@ public class TrainCarts extends PluginBase {
     private Task autosaveTask;
     private Task cacheCleanupTask;
     private Task mutexZoneUpdateTask;
+    private TCPropertyRegistry propertyRegistry;
     private TCPacketListener packetListener;
     private TCInteractionPacketListener interactionPacketListener;
     private FileConfiguration config;
@@ -78,8 +85,20 @@ public class TrainCarts extends PluginBase {
     private GlowColorTeamProvider glowColorTeamProvider;
     private PathProvider pathProvider;
     private RouteManager routeManager;
+    private final TCSelectorHandlerRegistry selectorHandlerRegistry = new TCSelectorHandlerRegistry(this);
     private Economy econ = null;
     private SmoothCoastersAPI smoothCoastersAPI;
+    private Commands commands;
+
+    /**
+     * Gets the property registry which tracks all train and cart properties
+     * that have been registered.
+     * 
+     * @return property registry
+     */
+    public IPropertyRegistry getPropertyRegistry() {
+        return propertyRegistry;
+    }
 
     /**
      * Gets a helper class for assigning (fake) entities to teams to change their glowing effect
@@ -148,6 +167,19 @@ public class TrainCarts extends PluginBase {
     }
 
     /**
+     * Gets the selector handler registry, which is used to replace selectors
+     * in commands with the handler-provided replacements.<br>
+     * <br>
+     * For example, this replaces <code>@ptrain[train=train12]</code>
+     * with the names of players in the train.
+     *
+     * @return selector handler registry
+     */
+    public SelectorHandlerRegistry getSelectorHandlerRegistry() {
+        return this.selectorHandlerRegistry;
+    }
+
+    /**
      * Gets the Economy manager
      *
      * @return
@@ -196,11 +228,17 @@ public class TrainCarts extends PluginBase {
      */
     public static void sendMessage(Player player, String text) {
         if (TCConfig.SignLinkEnabled) {
-            int startindex, endindex;
-            while ((startindex = text.indexOf('%')) != -1 && (endindex = text.indexOf('%', startindex + 1)) != -1) {
+            //TODO: SignLink 1.16.5-v1 supports far more functionality, such as escaping using %% and
+            //      filtering out variable names with spaces in them. This code doesn't do that.
+            //      Improvements could definitely be made.
+            int startindex, endindex = 0;
+            while ((startindex = text.indexOf('%', endindex)) != -1 && (endindex = text.indexOf('%', startindex + 1)) != -1) {
                 String varname = text.substring(startindex + 1, endindex);
                 String value = varname.isEmpty() ? "%" : Variables.get(varname).get(player.getName());
                 text = text.substring(0, startindex) + value + text.substring(endindex + 1);
+
+                // Search from beyond this point to avoid infinite loops if value contains %-characters
+                endindex = startindex + value.length();
             }
         }
         player.sendMessage(text);
@@ -312,7 +350,7 @@ public class TrainCarts extends PluginBase {
     }
 
     public void loadSavedTrains() {
-        this.savedTrainsStore = new SavedTrainPropertiesStore(getDataFolder() + File.separator + "SavedTrainProperties.yml");
+        this.savedTrainsStore = new SavedTrainPropertiesStore(null, getDataFolder() + File.separator + "SavedTrainProperties.yml");
         this.savedTrainsStore.loadModules(getDataFolder() + File.separator + "savedTrainModules");
     }
 
@@ -354,6 +392,19 @@ public class TrainCarts extends PluginBase {
 
         // Do this first
         Conversion.registerConverters(MinecartMemberStore.class);
+
+        // Initialize commands (Cloud command framework)
+        // Must make sure no TrainCarts state is instantly accessed while initializing
+        commands = new Commands();
+        commands.enable(this);
+
+        // Core properties need to be there before defaults/cart/train properties are loaded
+        // Will register commands that properties may define using annotations
+        propertyRegistry = new TCPropertyRegistry(this, commands.getHandler());
+        propertyRegistry.registerAll(StandardProperties.class);
+
+        // Selector registry, do this early in case a command block triggers during enabling
+        selectorHandlerRegistry.enable();
 
         // And this
         CartAttachment.registerDefaultAttachments();
@@ -467,12 +518,12 @@ public class TrainCarts extends PluginBase {
             }
         });
 
-        // Register listeners and commands
+        // Register listeners
         this.register(packetListener = new TCPacketListener(), TCPacketListener.LISTENED_TYPES);
         this.register(interactionPacketListener = new TCInteractionPacketListener(), TCInteractionPacketListener.TYPES);
         this.register(TCListener.class);
+        this.register(TrainChestListener.class);
         this.register(this.redstoneTracker = new RedstoneTracker(this));
-        this.register("train", "cart");
 
         // Destroy all trains after initializing if specified
         if (TCConfig.destroyAllOnShutdown) {
@@ -588,6 +639,11 @@ public class TrainCarts extends PluginBase {
             for (World world : WorldUtil.getWorlds()) {
                 for (Chunk chunk : WorldUtil.getChunks(world)) {
                     for (org.bukkit.entity.Entity entity : ChunkUtil.getEntities(chunk)) {
+                        // Ignore dead/removed entities
+                        if (entity.isDead()) {
+                            continue;
+                        }
+
                         // Double-check for groups
                         MinecartGroup group = MinecartGroup.get(entity);
                         if (group != null) {
@@ -646,8 +702,9 @@ public class TrainCarts extends PluginBase {
         AttachmentTypeRegistry.instance().unregisterAll();
     }
 
+    @Override
     public boolean command(CommandSender sender, String cmd, String[] args) {
-        return Commands.execute(sender, cmd, args);
+        return false; // Note: unused, no commands are registered in plugin.yml
     }
 
     @Override

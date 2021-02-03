@@ -58,9 +58,6 @@ public class SignActionStation extends SignAction {
         //Check if not already targeting
         MinecartGroup group = info.getGroup();
         Station station = new Station(info);
-        if (!station.isValid()) {
-            return;
-        }
     	if (info.getGroup().isManualMovement && info.isAction(SignActionType.GROUP_ENTER)) {
         	if (info.getGroup().lctManual.isSemiAuto()) {
         		info.getGroup().lctManual.aDir = station.getNextDirectionFace();
@@ -125,7 +122,7 @@ public class SignActionStation extends SignAction {
                 .setPermission(Permission.BUILD_STATION)
                 .setName("station")
                 .setDescription("stop, wait and launch trains")
-                .setMinecraftWIKIHelp("Mods/TrainCarts/Signs/Station")
+                .setTraincartsWIKIHelp("TrainCarts/Signs/Station")
                 .handle(event.getPlayer());
     }
 

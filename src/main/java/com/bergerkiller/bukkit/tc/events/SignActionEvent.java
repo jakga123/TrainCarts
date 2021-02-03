@@ -11,7 +11,6 @@ import com.bergerkiller.bukkit.tc.SignActionHeader;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.cache.RailSignCache;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
-import com.bergerkiller.bukkit.tc.controller.MinecartGroupStore;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.controller.MinecartMemberStore;
 import com.bergerkiller.bukkit.tc.controller.components.RailJunction;
@@ -240,6 +239,7 @@ public class SignActionEvent extends Event implements Cancellable {
             state.setRailPiece(this.getRailPiece());
             state.position().setLocation(state.railType().getSpawnLocation(state.railBlock(), signDirection));
             state.position().setMotion(signDirection);
+            state.initEnterDirection();
             state.loadRailLogic().getPath().snap(state.position(), state.railBlock());
             state.initEnterDirection();
             return state.enterFace();
@@ -446,32 +446,27 @@ public class SignActionEvent extends Event implements Cancellable {
             return;
         }
 
-        MinecartGroupStore.notifyPhysicsChange();
-
-        Block railBlock = this.getRails();
-        RailType railType = RailType.getType(railBlock);
-
         // If from and to are the same, the train is launched back towards where it came
         // In this special case, select another junction part of the path as the from
         // and launch the train backwards
         if (fromJunction.name().equals(toJunction.name())) {
             // Pick any other junction that is not equal to 'to'
             // Prefer junctions that have already been selected (assert from rail path)
-            RailState state = RailState.getSpawnState(railType, railBlock);
+            RailState state = RailState.getSpawnState(this.rail);
             RailPath path = state.loadRailLogic().getPath();
             RailPath.Position p0 = path.getStartPosition();
             RailPath.Position p1 = path.getEndPosition();
             double min_dist = Double.MAX_VALUE;
-            for (RailJunction junc : railType.getJunctions(railBlock)) {
+            for (RailJunction junc : this.rail.getJunctions()) {
                 if (junc.name().equals(fromJunction.name())) {
                     continue;
                 }
                 if (junc.position().relative) {
-                    p0.makeRelative(railBlock);
-                    p1.makeRelative(railBlock);
+                    p0.makeRelative(this.rail.block());
+                    p1.makeRelative(this.rail.block());
                 } else {
-                    p0.makeAbsolute(railBlock);
-                    p1.makeAbsolute(railBlock);
+                    p0.makeAbsolute(this.rail.block());
+                    p1.makeAbsolute(this.rail.block());
                 }
                 double dist_sq = Math.min(p0.distanceSquared(junc.position()),
                                           p1.distanceSquared(junc.position()));
@@ -482,7 +477,7 @@ public class SignActionEvent extends Event implements Cancellable {
             }
 
             // Switch it
-            railType.switchJunction(this.getRails(), fromJunction, toJunction);
+            this.rail.switchJunction(fromJunction, toJunction);
 
             // Launch train into the opposite direction, if required
             if (this.hasMember()) {
@@ -501,8 +496,8 @@ public class SignActionEvent extends Event implements Cancellable {
             return;
         }
 
-        // Normal switching. Nothing special here.
-        railType.switchJunction(this.getRails(), fromJunction, toJunction);
+        // All the switching logic under normal conditions happens here
+        this.rail.switchJunction(fromJunction, toJunction);
     }
 
     /**
@@ -774,7 +769,7 @@ public class SignActionEvent extends Event implements Cancellable {
     /**
      * Gets a collection of all Minecart Group train properties this sign remotely controls
      *
-     * @return Train properties of remotely controlled groups
+     * @return Train properties of remotely controlled groups (unmodifiable)
      */
     public Collection<TrainProperties> getRCTrainProperties() {
         return TrainProperties.matchAll(this.getRCName());
@@ -787,9 +782,7 @@ public class SignActionEvent extends Event implements Cancellable {
      */
     public String getRCName() {
         if (this.isRCSign()) {
-            String name = this.getLine(0);
-            int idx = name.indexOf(' ') + 1;
-            return name.substring(idx, name.length() - 1);
+            return this.header.getRemoteName();
         } else {
             return null;
         }
