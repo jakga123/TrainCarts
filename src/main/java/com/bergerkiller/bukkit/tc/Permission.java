@@ -120,15 +120,15 @@ public enum Permission implements IPermissionEnum {
     TICKET_MANAGE("train.ticket.manage", PermissionDefault.OP, "The player can edit the details of existing tickets or create new tickets"),
 
     // Special hidden debug sekretz
-    DEBUG_COMMAND_DEBUG("train.debug", PermissionDefault.OP, "The player can use special commands useful for debugging the plugin");
+    DEBUG_COMMAND_DEBUG("train.debug", PermissionDefault.OP, "The player can use special commands useful for debugging the plugin"),
 	
-    public static final Permission DRIVE_ME = new Permission("train.drive.me", PermissionDefault.OP, "Drive Me");
-    public static final Permission DRIVE_120 = new Permission("train.drive.120", PermissionDefault.OP, "Drive Under 121 (Metro)");
-    public static final Permission DRIVE_200 = new Permission("train.drive.200", PermissionDefault.OP, "Drive Under 201 (Locomotive)");
-    public static final Permission DRIVE_NOLIMIT = new Permission("train.drive.unlimited", PermissionDefault.OP, "Drive Unlimit Speed (Yunghui)");
-    public static final Permission DRIVE_ALL = new Permission("train.drive.all", PermissionDefault.OP, "Drive All");
-    public static final Permission DRIVE_OFF = new Permission("train.drive.off", PermissionDefault.OP, "Drive Off");
-    public static final Permission DRIVE_ADMIN = new Permission("train.drive.admin", PermissionDefault.OP, "Drive Admin");
+    DRIVE_ME("train.drive.me", PermissionDefault.OP, "Drive Me"),
+    DRIVE_120("train.drive.120", PermissionDefault.OP, "Drive Under 121 (Metro)"),
+    DRIVE_200("train.drive.200", PermissionDefault.OP, "Drive Under 201 (Locomotive)"),
+    DRIVE_NOLIMIT("train.drive.unlimited", PermissionDefault.OP, "Drive Unlimit Speed (Yunghui)"),
+    DRIVE_ALL("train.drive.all", PermissionDefault.OP, "Drive All"),
+	DRIVE_OFF("train.drive.off", PermissionDefault.OP, "Drive Off"),
+    DRIVE_ADMIN("train.drive.admin", PermissionDefault.OP, "Drive Admin");
 
     private final String _root;
     private final PermissionDefault _default;

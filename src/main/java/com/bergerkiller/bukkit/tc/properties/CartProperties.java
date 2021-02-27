@@ -741,8 +741,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
     }
 
     public void setDriveSound(String driveSound) {
-        this.driveSound = driveSound;
+        set(StandardProperties.DRIVE_SOUND, driveSound);
         this.getHolder().settingRSL();
-        //set(StandardProperties.DRIVE_SOUND, driveSound);
     }
 }

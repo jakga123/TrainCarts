@@ -37,6 +37,7 @@ import cloud.commandframework.annotations.CommandMethod;
 import cloud.commandframework.annotations.Flag;
 import cloud.commandframework.annotations.specifier.Greedy;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -470,8 +471,33 @@ public class TrainCommands {
             final TrainProperties properties,
             final @Argument("mode") String driveMode
 	) {
-		return true;
-    	//LCTManual.commandDrive(TrainProperties.getHolder(), sender, driveMode);
+		MinecartGroup group = properties.getHolder();
+		if (!Permission.DRIVE_NOLIMIT.has(sender) && properties.getSpeedLimit() > 2) {
+			return;
+		}
+		if (!Permission.DRIVE_200.has(sender) && properties.getSpeedLimit() <= 2 && properties.getSpeedLimit() > 1.2d) {
+			return;
+		}
+		if (!Permission.DRIVE_120.has(sender) && properties.getSpeedLimit() <= 1.2d) {
+			return;
+		}
+    	if (driveMode.equals("false") || driveMode.equals("off") || driveMode.equals("auto")) {
+    		if (!Permission.DRIVE_OFF.has(sender)) {
+    			return;
+    		}
+			properties.getHolder().lctManual.reset();
+			properties.getHolder().lctManual = new LCTManual(properties.getHolder(), "");
+    		sender.sendMessage(ChatColor.GREEN + "자동운전으로 전환되었습니다.");
+    		return;
+    	}
+    	sender.sendMessage(ChatColor.GREEN + "기관사님 환영합니다. 안전운전 되십시오.");
+    	group.getActions().clear();
+    	properties.setSlowingDown(false);
+        properties.setWaitDistance(0);
+        group.setForwardForce(0);
+        group.lctManual.reset();
+        group.lctManual = new LCTManual(group, sender.getName());
+        group.lctManual.stopped = true;
 	}
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
@@ -479,9 +505,37 @@ public class TrainCommands {
     @CommandDescription("수동운전체계")
 	private void commandSketchTownUnlink(
             final CommandSender sender,
-            final TrainProperties properties,
+            final TrainProperties properties
 	) {
-    	properties.getHolder().lctManual.unlink(sender);
+		MinecartGroup group = properties.getHolder();
+		if (!group.isManualMovement) {
+			return;
+		}
+		if (!(sender instanceof Player)) {
+			return;
+		}
+		Player player = (Player) sender;
+		MinecartMember<?> head;
+		if (group.getAverageForce() == 0 && group.lctManual.stopped && group.lctManual.pilot == sender.getName()) {
+	    	if (player.getVehicle() == group.head().getEntity().getEntity()) {
+	    		head = group.head();
+	    	} else if (player.getVehicle() == group.tail().getEntity().getEntity()) {
+	    		head = group.tail();
+	    	} else {
+	    		sender.sendMessage(ChatColor.RED + "열차를 분리할 수 없습니다!");
+	    		return;
+	    	}
+			group.getActions().clear();
+			group.setForwardForce(0);
+			group.lctManual = new LCTManual(group, "");
+			head.clearGroup();
+			head.getGroup().getActions().clear();
+			head.getGroup().setForwardForce(0);
+			head.getGroup().getProperties().load(group.getProperties());
+			head.getGroup().getProperties().setWaitDistance(0);
+			head.getGroup().lctManual = new LCTManual(head.getGroup(), group.lctManual.pilot);
+		}
+		sender.sendMessage(ChatColor.RED + "열차를 분리할 수 없습니다!");
 	}
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ADMIN)

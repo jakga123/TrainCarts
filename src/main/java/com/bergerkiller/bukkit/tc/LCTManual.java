@@ -9,6 +9,7 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
@@ -269,11 +270,6 @@ public class LCTManual {
 				group.setForwardForce(brake);
 			}
 		}
-		if (group.getAverageForce() > 0.1) {
-			group.getProperties().playerCollision = CollisionMode.KILL;
-		} else {
-			group.getProperties().playerCollision = CollisionMode.PUSH;
-		}
 		String doorString = "";
 		String notchString = "";
 		if (ldoor) {
@@ -395,68 +391,6 @@ public class LCTManual {
 		prop.getHolder().lctManual.unlink(p);
 		return true;
 	*/
-	public static void commandDrive(MinecartGroup g, Player p, String[] args) {
-		if (g.getProperties().getSpeedLimit() > 2) {
-			Permission.DRIVE_NOLIMIT.handle(p);
-		}
-		if (g.getProperties().getSpeedLimit() <= 2 && g.getProperties().getSpeedLimit() > 1.2d) {
-			Permission.DRIVE_200.handle(p);
-		}
-		if (g.getProperties().getSpeedLimit() <= 1.2d) {
-			Permission.DRIVE_120.handle(p);
-		}
-		if (args.length > 0) {
-            if (args[0].length() > 0) {
-            	if (args[0].equals("false") || args[0].equals("off") || args[0].equals("auto")) {
-        			Permission.DRIVE_OFF.handle(p);
-                    g.lctManual.reset();
-            		g.lctManual = new LCTManual(g, "");
-            		p.sendMessage(ChatColor.GREEN + "자동운전으로 전환되었습니다.");
-            		return;
-            	}
-    			Permission.DRIVE_ALL.handle(p);
-        		p = Bukkit.getPlayer(args[0]);
-            }
-		} else {
-			Permission.DRIVE_ME.handle(p);
-		}
-    	if (p instanceof Player) {
-    		p.sendMessage(ChatColor.GREEN + "기관사님 환영합니다. 안전운전 되십시오.");
-    		g.getActions().clear();
-            g.getProperties().setSlowingDown(false);
-            g.getProperties().setWaitDistance(0);
-            g.setForwardForce(0);
-            g.lctManual.reset();
-    		g.lctManual = new LCTManual(g, p.getName());
-    		g.lctManual.stopped = true;
-    	}
-	}
-	public void unlink(Player p) {
-		if (!group.isManualMovement) {
-			return;
-		}
-		MinecartMember<?> head;
-    	if (group.getAverageForce() == 0 && stopped && pilot == p.getName()) {
-        	if (p.getVehicle() == group.head().getEntity().getEntity()) {
-        		head = group.head();
-        	} else if (p.getVehicle() == group.tail().getEntity().getEntity()) {
-        		head = group.tail();
-        	} else {
-        		p.sendMessage(ChatColor.RED + "열차를 분리할 수 없습니다!");
-        		return;
-        	}
-			group.getActions().clear();
-			group.setForwardForce(0);
-			group.lctManual = new LCTManual(group, "");
-			head.clearGroup();
-			head.getGroup().getActions().clear();
-			head.getGroup().setForwardForce(0);
-			head.getGroup().getProperties().load(group.getProperties());
-			head.getGroup().getProperties().setWaitDistance(0);
-			head.getGroup().lctManual = new LCTManual(head.getGroup(), pilot);
-    	}
-		p.sendMessage(ChatColor.RED + "열차를 분리할 수 없습니다!");
-	}
 	public MinecartGroup getGroup() {
 		return group;
 	}
