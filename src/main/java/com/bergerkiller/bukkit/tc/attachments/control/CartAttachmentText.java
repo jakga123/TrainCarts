@@ -15,6 +15,7 @@ import com.bergerkiller.bukkit.tc.attachments.VirtualEntity;
 import com.bergerkiller.bukkit.tc.attachments.api.Attachment;
 import com.bergerkiller.bukkit.tc.attachments.api.AttachmentType;
 import com.bergerkiller.bukkit.tc.attachments.ui.MapWidgetAttachmentNode;
+import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.generated.net.minecraft.server.EntityHandle;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;

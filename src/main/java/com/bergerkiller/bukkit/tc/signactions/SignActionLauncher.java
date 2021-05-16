@@ -86,20 +86,17 @@ public class SignActionLauncher extends SignAction {
                 launchConfig.setDistance(Util.calculateStraightLength(info.getRails(), direction));
             }
 
-            double launchVelocity = velocity;
-            if (addToRealSpeed) {
-                launchVelocity += info.getMember().getRealSpeed();
-            }
+            FormattedSpeed launchVelocity = velocity;
             if (info.getGroup().isManualMovement) {
         		if (!info.getGroup().lctManual.isSemiAuto()) {
-            		if (launchVelocity == TCConfig.launchForce) {
+            		if (launchVelocity.equals(FormattedSpeed.of(TCConfig.launchForce))) {
                 		info.getGroup().lctManual.clearTarget();
             			//System.out.println("LCTM Action : clearTarget");
             		} else if (launchConfig.hasDistance() || launchConfig.hasDuration()) {
-                		info.getGroup().lctManual.setTarget(launchVelocity, launchConfig.getDistance());
+                		info.getGroup().lctManual.setTarget(launchVelocity.getValue(), launchConfig.getDistance());
             			//System.out.println("LCTM Action : setTarget 2");
             		} else {
-                		info.getGroup().lctManual.setTarget(launchVelocity);
+                		info.getGroup().lctManual.setTarget(launchVelocity.getValue());
             			//System.out.println("LCTM Action : setTarget 1");
             		}
             		return;
