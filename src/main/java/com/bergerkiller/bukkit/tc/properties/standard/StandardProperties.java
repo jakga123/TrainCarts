@@ -9,8 +9,8 @@ import com.bergerkiller.bukkit.tc.Permission;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.properties.api.ICartProperty;
 import com.bergerkiller.bukkit.tc.properties.api.ITrainProperty;
-import com.bergerkiller.bukkit.tc.properties.api.PropertyParseContext;
 import com.bergerkiller.bukkit.tc.properties.api.PropertyParser;
+import com.bergerkiller.bukkit.tc.properties.api.context.PropertyParseContext;
 import com.bergerkiller.bukkit.tc.properties.standard.category.*;
 
 /**
@@ -33,7 +33,7 @@ public class StandardProperties {
     public static final PlayerExitProperty ALLOW_PLAYER_EXIT = new PlayerExitProperty();
     public static final GravityProperty GRAVITY = new GravityProperty();
     public static final SpeedLimitProperty SPEEDLIMIT = new SpeedLimitProperty();
-    public static final TrainNameProperty TRAIN_NAME = new TrainNameProperty();
+    public static final TrainNameFormatProperty TRAIN_NAME_FORMAT = new TrainNameFormatProperty();
     public static final OnlyOwnersCanEnterProperty ONLY_OWNERS_CAN_ENTER = new OnlyOwnersCanEnterProperty();
     public static final PickUpItemsProperty PICK_UP_ITEMS = new PickUpItemsProperty();
     public static final SoundEnabledProperty SOUND_ENABLED = new SoundEnabledProperty();
@@ -46,6 +46,7 @@ public class StandardProperties {
     public static final OwnerSetProperty OWNERS = new OwnerSetProperty();
     public static final OwnerPermissionSet OWNER_PERMISSIONS = new OwnerPermissionSet();
     public static final BreakBlocksProperty BLOCK_BREAK_TYPES = new BreakBlocksProperty();
+    public static final RealtimePhysicsProperty REALTIME_PHYSICS = new RealtimePhysicsProperty();
 
     public static final ICartProperty<String> ENTER_MESSAGE = new ICartProperty<String>() {
 

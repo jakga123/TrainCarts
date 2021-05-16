@@ -15,8 +15,8 @@ import com.bergerkiller.bukkit.tc.commands.annotations.CommandTargetTrain;
 import com.bergerkiller.bukkit.tc.properties.TrainProperties;
 import com.bergerkiller.bukkit.tc.properties.api.PropertyCheckPermission;
 import com.bergerkiller.bukkit.tc.properties.api.PropertyInvalidInputException;
-import com.bergerkiller.bukkit.tc.properties.api.PropertyParseContext;
 import com.bergerkiller.bukkit.tc.properties.api.PropertyParser;
+import com.bergerkiller.bukkit.tc.properties.api.context.PropertyParseContext;
 import com.bergerkiller.bukkit.tc.properties.standard.fieldbacked.FieldBackedStandardTrainProperty;
 import com.bergerkiller.bukkit.tc.properties.standard.type.CollisionMobCategory;
 import com.bergerkiller.bukkit.tc.properties.standard.type.CollisionOptions;
@@ -179,7 +179,7 @@ public final class CollisionProperty extends FieldBackedStandardTrainProperty<Co
             final CommandSender sender,
             final TrainProperties properties
     ) {
-        showMode(sender, "players", properties.getCollision().trainMode());
+        showMode(sender, "players", properties.getCollision().playerMode());
     }
 
     @CommandTargetTrain

@@ -5,7 +5,6 @@ import com.bergerkiller.bukkit.common.ToggledState;
 import com.bergerkiller.bukkit.common.bases.IntVector3;
 import com.bergerkiller.bukkit.common.bases.mutable.VectorAbstract;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
-import com.bergerkiller.bukkit.common.controller.EntityNetworkController;
 import com.bergerkiller.bukkit.common.entity.CommonEntity;
 import com.bergerkiller.bukkit.common.entity.type.CommonMinecart;
 import com.bergerkiller.bukkit.common.inventory.ItemParser;
@@ -30,6 +29,7 @@ import com.bergerkiller.bukkit.tc.attachments.animation.AnimationOptions;
 import com.bergerkiller.bukkit.tc.cache.RailMemberCache;
 import com.bergerkiller.bukkit.tc.controller.components.ActionTrackerGroup;
 import com.bergerkiller.bukkit.tc.controller.components.AnimationController;
+import com.bergerkiller.bukkit.tc.controller.components.AttachmentControllerGroup;
 import com.bergerkiller.bukkit.tc.controller.components.SignTrackerGroup;
 import com.bergerkiller.bukkit.tc.controller.components.SpeedAheadWaiter;
 import com.bergerkiller.bukkit.tc.controller.components.RailTrackerGroup;
@@ -52,7 +52,9 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -67,7 +69,6 @@ import java.util.stream.Collectors;
 public class MinecartGroup extends MinecartGroupStore implements IPropertiesHolder, AnimationController {
     private static final long serialVersionUID = 3;
     private static final LongHashSet chunksBuffer = new LongHashSet(50);
-    protected final ToggledState networkInvalid = new ToggledState();
     protected final ToggledState ticked = new ToggledState();
     protected final ChunkArea chunkArea = new ChunkArea();
     private boolean chunkAreaValid = false;
@@ -75,6 +76,7 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
     private final RailTrackerGroup railTracker = new RailTrackerGroup(this);
     private final ActionTrackerGroup actionTracker = new ActionTrackerGroup(this);
     private final SpeedAheadWaiter speedAheadWaiter = new SpeedAheadWaiter(this);
+    private final AttachmentControllerGroup attachmentController = new AttachmentControllerGroup(this);
     protected long lastSync = Long.MIN_VALUE;
     private TrainProperties prop = null;
     private boolean breakPhysics = false;
@@ -177,6 +179,16 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
      */
     public RailTrackerGroup getRailTracker() {
         return this.railTracker;
+    }
+
+    /**
+     * Gets the attachment controller for this group. This controller manages
+     * the (synchronized) updates of all carts of the train.
+     *
+     * @return group attachment controller
+     */
+    public AttachmentControllerGroup getAttachments() {
+        return this.attachmentController;
     }
 
     public MinecartMember<?> head(int index) {
@@ -974,41 +986,30 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
         return !groups.contains(this);
     }
 
+    /**
+     * Gets an inventory view of all the items in the carts of this train
+     *
+     * @return cart inventory view
+     */
     public Inventory getInventory() {
-        //count amount of storage minecarts
-        Inventory[] source = new Inventory[this.size(EntityType.MINECART_CHEST)];
-        int i = 0;
-        for (MinecartMember<?> mm : this) {
-            if (mm instanceof MinecartMemberChest) {
-                source[i] = ((MinecartMemberChest) mm).getEntity().getInventory();
-                i++;
-            }
-        }
-        if (source.length == 1) {
-            return source[0];
-        }
+        Inventory[] source = this.stream()
+                .map(MinecartMember::getEntity)
+                .map(CommonEntity::getEntity)
+                .filter(e -> e instanceof InventoryHolder)
+                .map(e -> ((InventoryHolder) e).getInventory())
+                .toArray(Inventory[]::new);
         return new MergedInventory(source);
     }
 
+    /**
+     * Gets an inventory view of all players inside all carts of this train
+     *
+     * @return player inventory view
+     */
     public Inventory getPlayerInventory() {
-        //count amount of player passengers
-        int count = 0;
-        for (MinecartMember<?> mm : this) {
-            if (mm.getEntity().hasPlayerPassenger()) {
-                count++;
-            }
-        }
-        Inventory[] source = new Inventory[count];
-        if (source.length == 1) {
-            return source[0];
-        }
-        int i = 0;
-        for (MinecartMember<?> mm : this) {
-            if (mm.getEntity().hasPlayerPassenger()) {
-                source[i] = mm.getPlayerInventory();
-                i++;
-            }
-        }
+        Inventory[] source = this.stream().flatMap(m -> m.getEntity().getPlayerPassengers().stream())
+                     .map(Player::getInventory)
+                     .toArray(Inventory[]::new);
         return new MergedInventory(source);
     }
 
@@ -1296,7 +1297,7 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
         }
     }
 
-    public void doPhysics() {
+    protected void doPhysics(TrainCarts plugin) {
         // NOP if unloaded
         if (this.isUnloaded()) {
             return;
@@ -1360,19 +1361,22 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
         }
 
         // If physics disabled this tick, cut off here.
-        if (!TCConfig.tickUpdateEnabled) {
+        if (!plugin.getTrainUpdateController().isTicking()) {
             return;
         }
 
         try {
             double totalforce = this.getAverageForce();
             double speedlimit = this.getProperties().getSpeedLimit();
-            if (totalforce > 0.4 && speedlimit > 0.4) {
-                this.updateStepCount = (int) Math.ceil(speedlimit / 0.4);
-                this.updateSpeedFactor = 1.0 / (double) this.updateStepCount;
+            double realtimeFactor = this.getProperties().hasRealtimePhysics()
+                    ? plugin.getTrainUpdateController().getRealtimeFactor() : 1.0;
+
+            if ((realtimeFactor*totalforce) > 0.4 && (realtimeFactor*speedlimit) > 0.4) {
+                this.updateStepCount = (int) Math.ceil((realtimeFactor*speedlimit) / 0.4);
+                this.updateSpeedFactor = realtimeFactor / (double) this.updateStepCount;
             } else {
                 this.updateStepCount = 1;
-                this.updateSpeedFactor = 1.0;
+                this.updateSpeedFactor = realtimeFactor;
             }
 
             try (Timings t = TCTimings.GROUP_DOPHYSICS.start()) {
@@ -1447,13 +1451,8 @@ public class MinecartGroup extends MinecartGroupStore implements IPropertiesHold
             }
 
             // Set up a valid network controller if needed
-            if (networkInvalid.clear()) {
-                for (MinecartMember<?> m : this) {
-                    EntityNetworkController<?> controller = m.getEntity().getNetworkController();
-                    if (!(controller instanceof MinecartMemberNetwork)) {
-                        m.getEntity().setNetworkController(new MinecartMemberNetwork());
-                    }
-                }
+            for (MinecartMember<?> member : this) {
+                member.getAttachments().fixNetworkController();
             }
 
             // Update some per-tick stuff

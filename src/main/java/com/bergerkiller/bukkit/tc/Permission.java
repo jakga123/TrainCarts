@@ -43,6 +43,7 @@ public enum Permission implements IPermissionEnum {
     PROPERTY_ALLOWPLAYERMANUALMOVEMENT("train.property.allowplayermanualmovement", PermissionDefault.TRUE, "The player can allow player passengers to control the train using steering controls"),
     PROPERTY_BREAKBLOCKS_NORMAL("train.property.breakblocks.normal", PermissionDefault.TRUE, "The player can configure a train to automatically break blocks from a whitelist for farming setups."),
     PROPERTY_BREAKBLOCKS_ADMIN("train.property.breakblocks.admin", PermissionDefault.OP, "The player can configure a train to break any type of block at all"),
+    PROPERTY_REALTIME("train.property.realtime", PermissionDefault.OP, "The player can configure that a train updates in realtime, adjusting for server tick lag and jitter"),
 
     COMMAND_DESTROY("train.command.destroy", PermissionDefault.OP, "The player can destroy owned carts through commands"),
     COMMAND_DESTROYALL("train.command.destroyall", PermissionDefault.OP, "The player can destroy all trains on the server"),
@@ -59,7 +60,7 @@ public enum Permission implements IPermissionEnum {
     COMMAND_CHANGETICK("train.command.changetick", PermissionDefault.OP, "Whether the player can alter the global update tick rate of TrainCarts (debug!)"),
     COMMAND_ISSUE("train.command.issue", PermissionDefault.TRUE, "Whether the player can report problems with TrainCarts"),
     COMMAND_GIVE_EDITOR("train.command.editor", PermissionDefault.OP, "Whether the player can use commands to give himself editors for trains (models) and signs"),
-    COMMAND_USE_STORAGE_CHEST("train.command.chest", PermissionDefault.OP, "Whether the player can use a chest item that can store and spawn trains"),
+    COMMAND_USE_STORAGE_CHEST("train.command.chest", PermissionDefault.OP, "Whether the player can use and modify a chest item that can store and spawn trains"),
     COMMAND_SAVE_TRAIN("train.command.save", PermissionDefault.OP, "Whether the player can use a command to save a train under a name"),
     COMMAND_SAVE_ROUTE("train.command.route.save", PermissionDefault.OP, "Whether the player can save a train or cart route to name to a global store"),
     COMMAND_SAVEDTRAIN_REVERSE("train.command.savedtrain.reverse", PermissionDefault.OP, "Whether the player can reverse a saved train, so that back becomes front when spawning"),
@@ -72,6 +73,7 @@ public enum Permission implements IPermissionEnum {
     COMMAND_ENTER("train.command.enter", PermissionDefault.OP, "Whether the player can use a command to enter the train/cart being edited"),
     COMMAND_LAUNCH("train.command.launch", PermissionDefault.OP, "Whether the player can use a command to launch the train being edited"),
     COMMAND_ANIMATE("train.command.animate", PermissionDefault.OP, "Whether the player can use a command to play an animation"),
+    COMMAND_LOCATE("train.command.locate", PermissionDefault.OP, "Whether the player can locate trains, which shows a line from player to trains"),
 
     SPAWNER_AUTOMATIC("train.spawner.automatic", PermissionDefault.TRUE, "The player can build spawners which automatically create carts"),
     SPAWNER_REGULAR("train.spawner.regular", PermissionDefault.TRUE, "The player can build spawners which create regular minecarts"),
@@ -116,9 +118,8 @@ public enum Permission implements IPermissionEnum {
     GENERAL_PLACE_TRAINCART("train.place.traincart", PermissionDefault.TRUE, "The player can place TrainCarts minecarts"),
     GENERAL_PROPERTIES_ADMIN("train.properties.admin", PermissionDefault.OP, "Carts placed by this player get the admin properties"),
     BREAK_MINECART_SELF("train.break.self", PermissionDefault.TRUE, "The player can break their own minecarts"),
-    BREAK_MINECART_ANY("train.break.any", PermissionDefault.OP, "The player can break all carts in the game"),
+    BREAK_MINECART_ANY("train.break.any", PermissionDefault.FALSE, "The player can break all carts in the game"),
     TICKET_MANAGE("train.ticket.manage", PermissionDefault.OP, "The player can edit the details of existing tickets or create new tickets"),
-
     // Special hidden debug sekretz
     DEBUG_COMMAND_DEBUG("train.debug", PermissionDefault.OP, "The player can use special commands useful for debugging the plugin"),
 	

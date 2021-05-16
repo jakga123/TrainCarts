@@ -4,7 +4,6 @@ import com.bergerkiller.bukkit.common.BlockLocation;
 import com.bergerkiller.bukkit.common.MessageBuilder;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
 import com.bergerkiller.bukkit.common.utils.EntityUtil;
-import com.bergerkiller.bukkit.common.utils.LogicUtil;
 import com.bergerkiller.bukkit.common.utils.MathUtil;
 import com.bergerkiller.bukkit.tc.Direction;
 import com.bergerkiller.bukkit.tc.LCTManual;
@@ -16,6 +15,7 @@ import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.attachments.animation.AnimationOptions;
 import com.bergerkiller.bukkit.tc.commands.annotations.CommandRequiresPermission;
 import com.bergerkiller.bukkit.tc.commands.annotations.CommandTargetTrain;
+import com.bergerkiller.bukkit.tc.commands.argument.DirectionOrFormattedSpeed;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.exception.IllegalNameException;
@@ -61,14 +61,16 @@ public class TrainCommands {
 
         if (sender instanceof Player && !properties.isOwner((Player) sender)) {
             if (!properties.hasOwners()) {
-                message.newLine().yellow("Note: This train is not owned, claim it using /train claim!");
+                message.yellow("Note: This train is not owned, claim it using /train claim!");
+                message.newLine().newLine();
             }
         }
-        message.newLine().yellow("Train name: ").white(properties.getTrainName());
-        message.newLine().yellow("Keep nearby chunks loaded: ").white(properties.isKeepingChunksLoaded());
 
+        StandardProperties.TRAIN_NAME_FORMAT.appendNameInfo(message, properties, "Train name: ");
         StandardProperties.SLOWDOWN.appendSlowdownInfo(message.newLine(), properties);
         StandardProperties.COLLISION.appendCollisionInfo(message.newLine(), properties);
+
+        message.newLine().yellow("Keep nearby chunks loaded: ").white(properties.isKeepingChunksLoaded());
 
         if (properties.getHolder() != null) {
             message.newLine().yellow("Current speed: ");
@@ -85,6 +87,13 @@ public class TrainCommands {
         }
 
         message.newLine().yellow("Maximum speed: ").white(properties.getSpeedLimit(), " blocks/tick");
+
+        message.newLine().yellow("Realtime physics: ");
+        if (properties.hasRealtimePhysics()) {
+            message.green("Enabled");
+        } else {
+            message.red("Disabled");
+        }
 
         // Remaining common info
         Commands.info(message, properties);
@@ -129,7 +138,6 @@ public class TrainCommands {
 
         ConfigurationNode exportedConfig = group.saveConfig();
         exportedConfig.remove("claims");
-        exportedConfig.set("name", name);
         Commands.exportTrain(sender, name, exportedConfig);
     }
 
@@ -234,9 +242,16 @@ public class TrainCommands {
             }
         }
         if (member != null) {
-            if (player.teleport(member.getEntity().getLocation())) {
-                member.addPassengerForced(player);
-                player.sendMessage(ChatColor.GREEN + "You entered a seat of train '" + trainProperties.getTrainName() + "'!");
+            Location entityLoc = member.getEntity().getLocation();
+            boolean mustTeleport = (player.getLocation().distance(entityLoc) > 64.0);
+            if (!mustTeleport || player.teleport(member.getEntity().getLocation())) {
+                if (member.addPassengerForced(player)) {
+                    player.sendMessage(ChatColor.GREEN + "You entered a seat of train '" + trainProperties.getTrainName() + "'!");
+                } else if (mustTeleport) {
+                    player.sendMessage(ChatColor.YELLOW + "Selected cart has no available seat. Teleported to the train instead.");
+                } else {
+                    player.sendMessage(ChatColor.YELLOW + "Selected cart has no available seat.");
+                }
             } else {
                 player.sendMessage(ChatColor.RED + "Failed to enter train: teleport was denied");
             }
@@ -245,15 +260,28 @@ public class TrainCommands {
         }
     }
 
+    @CommandRequiresPermission(Permission.COMMAND_LAUNCH)
+    @CommandMethod("train launch")
+    @CommandDescription("Launches the train forwards at station launch speed")
+    private void commandTrainLaunchNoArg(
+            final CommandSender sender,
+            final TrainProperties properties
+    ) {
+        commandTrainLaunch(sender, properties,
+                new DirectionOrFormattedSpeed(Direction.FORWARD),
+                null, null, null);
+    }
+
     @CommandTargetTrain
     @CommandRequiresPermission(Permission.COMMAND_LAUNCH)
-    @CommandMethod("train launch <speed>")
+    @CommandMethod("train launch <speed_or_direction>")
     @CommandDescription("Launches the train into a direction")
     private void commandTrainLaunch(
             final CommandSender sender,
             final TrainProperties properties,
-            final @Argument("speed") FormattedSpeed speed,
+            final @Argument("speed_or_direction") DirectionOrFormattedSpeed directionOrSpeed,
             final @Flag(value="direction", aliases="d") Direction directionFlag,
+            final @Flag(value="speed", aliases="s") FormattedSpeed speedFlag,
             final @Flag(value="options", aliases="o") String launchOptions
     ) {
         if (!properties.isLoaded()) {
@@ -262,17 +290,34 @@ public class TrainCommands {
         }
 
         MinecartGroup group = properties.getHolder();
-        commandCartLaunch(sender, group.head().getProperties(), speed, directionFlag, launchOptions);
+        commandCartLaunch(sender, group.head().getProperties(),
+                directionOrSpeed,
+                directionFlag,
+                speedFlag,
+                launchOptions);
     }
 
     @CommandRequiresPermission(Permission.COMMAND_LAUNCH)
-    @CommandMethod("cart launch <speed>")
+    @CommandMethod("cart launch")
+    @CommandDescription("Launches the cart forwards at station launch speed")
+    private void commandCartLaunchNoArg(
+            final CommandSender sender,
+            final CartProperties properties
+    ) {
+        commandCartLaunch(sender, properties,
+                new DirectionOrFormattedSpeed(Direction.FORWARD),
+                null, null, null);
+    }
+
+    @CommandRequiresPermission(Permission.COMMAND_LAUNCH)
+    @CommandMethod("cart launch <speed_or_direction>")
     @CommandDescription("Launches the train into a direction")
     private void commandCartLaunch(
             final CommandSender sender,
             final CartProperties properties,
-            final @Argument("speed") FormattedSpeed speed,
+            final @Argument("speed_or_direction") DirectionOrFormattedSpeed directionOrSpeed,
             final @Flag(value="direction", aliases="d") Direction directionFlag,
+            final @Flag(value="speed", aliases="s") FormattedSpeed speedFlag,
             final @Flag(value="options", aliases="o") String launchOptions
     ) {
         MinecartMember<?> member = properties.getHolder();
@@ -281,14 +326,24 @@ public class TrainCommands {
             return;
         }
 
+        // Choose the speed from flag, or the direction/speed argument value, or the default
+        // Oh lawd this code, cover your eyes!
+        final FormattedSpeed speed = (speedFlag != null) ? speedFlag :
+            (directionOrSpeed.hasFormattedSpeed() ?
+                    directionOrSpeed.getFormattedSpeed() :
+                        FormattedSpeed.of(TCConfig.launchForce));
+
+        // Choose direction from flag, or the direction/speed argument value, or the default
+        // Oof.
+        final Direction direction = (directionFlag != null) ? directionFlag :
+            (directionOrSpeed.hasDirection() ?
+                    directionOrSpeed.getDirection() : Direction.FORWARD);
+
         // Velocity, if relative, add current speed
         double velocity = speed.getValue();
         if (speed.isRelative()) {
             velocity += member.getGroup().getAverageForce();
         }
-
-        // Direction, if not specified use 'FORWARD'
-        Direction direction = LogicUtil.fixNull(directionFlag, Direction.FORWARD);
 
         // Optional launch configuration (distance / curve / acceleration)
         // TODO: Create parser for LauncherConfig

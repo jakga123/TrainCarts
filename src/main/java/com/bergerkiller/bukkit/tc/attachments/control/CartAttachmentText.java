@@ -103,9 +103,10 @@ public class CartAttachmentText extends CartAttachment {
     	if (!this.isAttached() || !this.isActive() || this.getController().getMember().isUnloaded()) {
     		return;
     	}
+		MinecartGroup group = this.getController().getMember().getGroup();
         String text = this.getConfig().get("text", " ");
-    	if (this.getController().getMember().getGroup().containVariableText(text)) {
-            this.entity.getMetaData().set(EntityHandle.DATA_CUSTOM_NAME, ChatText.fromMessage(this.getController().getMember().getGroup().getVariableText(text)));
+    	if (group.containVariableText(text)) {
+            this.entity.getMetaData().set(EntityHandle.DATA_CUSTOM_NAME, ChatText.fromMessage(group.getVariableText(text)));
     	}
     }
 
@@ -114,21 +115,19 @@ public class CartAttachmentText extends CartAttachment {
         return this.entity != null && this.entity.getEntityId() == entityId;
     }
 
-
-
     @Override
     public int getMountEntityId() {
         return this.entity.getEntityId();
     }
 
     @Override
-    public void onMove(boolean absolute) {
-        this.entity.syncPosition(absolute);
+    public void onTransformChanged(Matrix4x4 transform) {
+        this.entity.updatePosition(transform);
     }
 
     @Override
-    public void onTransformChanged(Matrix4x4 transform) {
-        this.entity.updatePosition(transform);
+    public void onMove(boolean absolute) {
+        this.entity.syncPosition(absolute);
     }
 
     @Override

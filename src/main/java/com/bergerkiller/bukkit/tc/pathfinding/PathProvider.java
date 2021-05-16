@@ -5,6 +5,7 @@ import com.bergerkiller.bukkit.common.Task;
 import com.bergerkiller.bukkit.common.config.CompressedDataReader;
 import com.bergerkiller.bukkit.common.config.CompressedDataWriter;
 import com.bergerkiller.bukkit.common.utils.StringUtil;
+import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.cache.RailSignCache;
 import com.bergerkiller.bukkit.tc.cache.RailPieceCache;
@@ -81,6 +82,7 @@ public class PathProvider extends Task {
                         }
                     }
                 }
+
                 // Generating connections
                 for (PathNode node : parr) {
                     int ncount = stream.readInt();
@@ -88,10 +90,17 @@ public class PathProvider extends Task {
                         node.addNeighbourFast(new PathConnection(parr[stream.readInt()], stream));
                     }
                 }
+
+                // Cancel all scheduled (pending) nodes
+                pendingNodes.clear();
             }
         }.read();
 
         hasChanges = false;
+
+        if (TCConfig.rerouteOnStartup) {
+            reroute();
+        }
     }
 
     public void disable() {

@@ -17,6 +17,8 @@ public abstract class Statement {
     }
 
     public static void init() {
+        // Note: For same priority(), evaluated from bottom to top
+        //       Late-registered statements evaluate before early ones.
         register(new StatementDestination());
         register(new StatementBoolean());
         register(new StatementRandom());
@@ -25,7 +27,7 @@ public abstract class Statement {
         register(new StatementEmpty());
         register(new StatementPassenger());
         register(new StatementOwners());
-        register(new StatementItems());
+        register(new StatementTrainItems());
         register(new StatementFuel());
         register(new StatementType());
         register(new StatementVelocity());
@@ -46,6 +48,17 @@ public abstract class Statement {
         int index = Collections.binarySearch(statements, statement,
                 (a, b) -> Integer.compare(b.priority(), a.priority()));
         if (index < 0) index = ~index;
+
+        // Make sure that if priority is the same, an item is inserted at the beginning
+        // This allows third parties to register new statements without specifying priority,
+        // overriding existing statements that start with the same name.
+        {
+            int itemPriority = statement.priority();
+            while (index > 0 && statements.get(index - 1).priority() == itemPriority) {
+                index--;
+            }
+        }
+
         statements.add(index, statement);
         return statement;
     }
@@ -143,7 +156,7 @@ public abstract class Statement {
                     isLogicAnd = false;
                     statementText = statementText.substring(1);
                 }
-                boolean result = Statement.has(group, statementText, event);
+                boolean result = Statement.has(member, group, statementText, event);
                 if (isLogicAnd) {
                     match &= result;
                 } else {

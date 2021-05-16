@@ -36,6 +36,8 @@ import com.bergerkiller.bukkit.tc.exception.IllegalNameException;
  * These properties can also be used on spawner signs, or fused into spawning items.
  */
 public class SavedTrainPropertiesStore {
+    private static final String KEY_SAVED_NAME = "savedName";
+
     private final FileConfiguration savedTrainsConfig;
     private String name;
     private String modulesDirectory = "";
@@ -56,6 +58,7 @@ public class SavedTrainPropertiesStore {
         this.allowModules = allowModules;
 
         renameTrainsBeginningWithDigits();
+        storeSavedNameInConfig();
     }
 
     public void loadModules(String directory) {
@@ -67,7 +70,12 @@ public class SavedTrainPropertiesStore {
             }
             for (File file : StreamUtil.listFiles(dir)) {
                 String name = file.getName();
-                createModule(name);
+                String ext = name.toLowerCase(Locale.ENGLISH);
+                if (ext.endsWith(".yml")) {
+                    createModule(name);
+                } else if (ext.endsWith(".zip")) {
+                    TrainCarts.plugin.getLogger().warning("Zip files are not read, please extract '" + name + "'!");
+                }
             }
         } else {
             throw new UnsupportedOperationException("This store is not authorized to load modules");
@@ -363,6 +371,7 @@ public class SavedTrainPropertiesStore {
         // Store in mapping
         this.changed = true;
         this.savedTrainsConfig.set(name, newConfig);
+        newConfig.set(KEY_SAVED_NAME, name);
         this.names.remove(name);
         this.names.add(name);
 
@@ -478,6 +487,7 @@ public class SavedTrainPropertiesStore {
             this.names.remove(name);
             this.names.remove(newName);
             this.savedTrainsConfig.set(newName, oldConfig);
+            oldConfig.set(KEY_SAVED_NAME, newName);
             this.names.add(newName);
             this.changed = true;
             return true;
@@ -560,9 +570,43 @@ public class SavedTrainPropertiesStore {
 
             TrainCarts.plugin.log(Level.WARNING, "Train name '"  + name + "' starts with a digit, renamed to " + new_name);
             iter.set(new_name);
-            this.savedTrainsConfig.set(new_name, this.savedTrainsConfig.getNode(name).clone());
+
+            {
+                ConfigurationNode newConfig = this.savedTrainsConfig.getNode(name).clone();
+                newConfig.set(KEY_SAVED_NAME, new_name);
+                this.savedTrainsConfig.set(new_name, newConfig);
+            }
+
             this.savedTrainsConfig.remove(name);
             this.changed = true;
+        }
+    }
+
+    private void storeSavedNameInConfig() {
+        // Stores the key of each saved train node in the configuration itself
+        // This is done automatically, so this is a migration method to update old config
+        // If people change this field, revert that and log a warning
+        boolean logSavedNameFieldWarning = false;
+        for (ConfigurationNode config : this.savedTrainsConfig.getNodes()) {
+            if (!config.contains(KEY_SAVED_NAME)) {
+                config.set(KEY_SAVED_NAME, config.getName());
+                continue;
+            }
+
+            String setName = config.get(KEY_SAVED_NAME, config.getName());
+            if (!config.getName().equals(setName)) {
+                // Note: people may have intended to rename these properties
+                // It is best to notify about this.
+                TrainCarts.plugin.log(Level.WARNING, "Saved train '" + config.getName() + "' has a different "
+                        + "name set: '" + setName + "'");
+                logSavedNameFieldWarning = true;
+
+                config.set(KEY_SAVED_NAME, config.getName());
+            }
+        }
+        if (logSavedNameFieldWarning) {
+            TrainCarts.plugin.log(Level.WARNING, "If the intention was to rename the train, instead "
+                    + "rename the key, not field '" + KEY_SAVED_NAME + "'");
         }
     }
 

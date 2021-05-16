@@ -27,14 +27,16 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
     /**
      * Called onPhysics for all Minecart entities who didn't get ticked in the previous run.
      * This is a sort of hack against the bugged issues on some server implementations.
+     *
+     * @param plugin Main TrainCarts plugin instance initiating this
      */
-    public static void doFixedTick() {
+    public static void doFixedTick(TrainCarts plugin) {
         try (ImplicitlySharedSet<MinecartGroup> groups_copy = groups.clone()) {
             try {
                 for (MinecartGroup group : groups_copy) {
                     // Tick the train if required
                     if (!group.ticked.clear()) {
-                        group.doPhysics();
+                        group.doPhysics(plugin);
                     }
 
                     // Perform post-tick physics for all Minecarts in the train, if not previously ticked
@@ -91,7 +93,7 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
         // There is not a group with this name already?
         MinecartGroup g = new MinecartGroup();
         if (name != null) {
-            g.setProperties(TrainPropertiesStore.get(name));
+            g.setProperties(TrainPropertiesStore.create(name));
         }
         addMembersAndFinalize(g, members);
         return g;
@@ -148,7 +150,9 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
 
     public static MinecartGroup spawn(SpawnableGroup spawnableGroup, SpawnableGroup.SpawnLocationList locations) {
         MinecartGroup group = new MinecartGroup();
+        group.setProperties(TrainPropertiesStore.createFromConfig(spawnableGroup.getConfig()));
         groups.add(group);
+
         for (int i = locations.locations.size() - 1; i >= 0; i--) {
             SpawnableMember.SpawnLocation loc = locations.locations.get(i);
             Location spawnLoc = loc.location;
@@ -159,8 +163,8 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
             // Spawn the minecart
             group.add(loc.member.spawn(spawnLoc));
         }
+
         group.updateDirection();
-        group.getProperties().load(spawnableGroup.getConfig());
         GroupCreateEvent.call(group);
         group.onGroupCreated();
         return group;
@@ -182,11 +186,11 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
     /**
      * Finds all the Minecart Groups that match the name with the expression given
      *
-     * @param expression to match to
+     * @param nameExpression Name expression to match train names against
      * @return a Collection of MinecartGroup that match (unmodifiable)
      */
-    public static Collection<MinecartGroup> matchAll(String expression) {
-        return TrainPropertiesStore.matchAll(expression).stream()
+    public static Collection<MinecartGroup> matchAll(String nameExpression) {
+        return TrainPropertiesStore.matchAll(nameExpression).stream()
                 .map(TrainProperties::getHolder)
                 .filter(Objects::nonNull)
                 .collect(StreamUtil.toUnmodifiableList());

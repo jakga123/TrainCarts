@@ -42,6 +42,7 @@ import com.bergerkiller.bukkit.tc.properties.standard.type.BankingOptions;
 import com.bergerkiller.bukkit.tc.properties.standard.type.CollisionMobCategory;
 import com.bergerkiller.bukkit.tc.properties.standard.type.SignSkipOptions;
 import com.bergerkiller.bukkit.tc.properties.standard.type.SlowdownMode;
+import com.bergerkiller.bukkit.tc.properties.standard.type.TrainNameFormat;
 import com.bergerkiller.bukkit.tc.properties.standard.type.WaitOptions;
 import com.bergerkiller.bukkit.tc.signactions.SignActionBlockChanger;
 import com.bergerkiller.bukkit.tc.storage.OfflineGroup;
@@ -984,6 +985,30 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
     }
 
     /**
+     * Gets whether the train uses realtime physics. When enabled, takes into account
+     * the server tick rate when moving the train. This speeds up the train when the
+     * server lags behind, and slows it down when the server catches up. This attempts
+     * to make the movement speed of the train constant despite server tick rate jitter.
+     *
+     * @return True if realtime physics is enabled
+     */
+    public boolean hasRealtimePhysics() {
+        return get(StandardProperties.REALTIME_PHYSICS);
+    }
+
+    /**
+     * Sets whether the train uses realtime physics. When enabled, takes into account
+     * the server tick rate when moving the train. This speeds up the train when the
+     * server lags behind, and slows it down when the server catches up. This attempts
+     * to make the movement speed of the train constant despite server tick rate jitter.
+     *
+     * @return param realtime Whether realtime physics is enabled
+     */
+    public void setRealtimePhysics(boolean realtime) {
+        set(StandardProperties.REALTIME_PHYSICS, realtime);
+    }
+
+    /**
      * Gets a list of tickets that can be used for entering this train
      * 
      * @return tickets
@@ -1047,7 +1072,7 @@ public class TrainProperties extends TrainPropertiesStore implements IProperties
     }
 
     public boolean isTrainRenamed() {
-        return !this.trainname.startsWith("train") || !ParseUtil.isNumeric(this.trainname.substring(5));
+        return !TrainNameFormat.DEFAULT.matches(getTrainName());
     }
 
     public boolean isLoaded() {

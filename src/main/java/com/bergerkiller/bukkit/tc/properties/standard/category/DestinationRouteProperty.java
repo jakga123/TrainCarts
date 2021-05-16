@@ -25,8 +25,8 @@ import com.bergerkiller.bukkit.tc.properties.IPropertiesHolder;
 import com.bergerkiller.bukkit.tc.properties.TrainProperties;
 import com.bergerkiller.bukkit.tc.properties.api.ICartProperty;
 import com.bergerkiller.bukkit.tc.properties.api.PropertyCheckPermission;
-import com.bergerkiller.bukkit.tc.properties.api.PropertyParseContext;
 import com.bergerkiller.bukkit.tc.properties.api.PropertyParser;
+import com.bergerkiller.bukkit.tc.properties.api.context.PropertyParseContext;
 import com.bergerkiller.bukkit.tc.properties.standard.StandardProperties;
 
 import cloud.commandframework.annotations.Argument;
@@ -378,6 +378,18 @@ public final class DestinationRouteProperty implements ICartProperty<List<String
         }
     }
 
+    @PropertyParser(value="route add route", processPerCart = true)
+    public List<String> parseAddRoute(PropertyParseContext<List<String>> context) {
+        List<String> route = TrainCarts.plugin.getRouteManager().findRoute(context.input());
+        if (route.isEmpty()) {
+            return context.current();
+        } else {
+            ArrayList<String> newRoute = new ArrayList<String>(context.current());
+            newRoute.addAll(route);
+            return Collections.unmodifiableList(newRoute);
+        }
+    }
+
     @PropertyParser(value="remroute|removeroute|route rem|route remove", processPerCart = true)
     public List<String> parseRemove(PropertyParseContext<List<String>> context) {
         if (context.input().isEmpty() || !context.current().contains(context.input())) {
@@ -385,6 +397,18 @@ public final class DestinationRouteProperty implements ICartProperty<List<String
         } else {
             ArrayList<String> newRoute = new ArrayList<String>(context.current());
             while (newRoute.remove(context.input())); // remove all instances
+            return Collections.unmodifiableList(newRoute);
+        }
+    }
+
+    @PropertyParser(value="route remove route|route rem route", processPerCart = true)
+    public List<String> parseRemoveRoute(PropertyParseContext<List<String>> context) {
+        List<String> route = TrainCarts.plugin.getRouteManager().findRoute(context.input());
+        if (route.isEmpty()) {
+            return context.current();
+        } else {
+            ArrayList<String> newRoute = new ArrayList<String>(context.current());
+            while (newRoute.removeAll(route)); // remove all instances
             return Collections.unmodifiableList(newRoute);
         }
     }

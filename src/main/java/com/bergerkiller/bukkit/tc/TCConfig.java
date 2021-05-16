@@ -1,6 +1,7 @@
 package com.bergerkiller.bukkit.tc;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -71,7 +72,6 @@ public class TCConfig {
     public static boolean allowRailEditing;
     public static double manualMovementFactor;
     public static boolean allMinecartsAreTrainCarts;
-    public static boolean useNetworkSynchronizer;
     public static boolean allowUpsideDownRails;
     public static boolean allowNetherTeleport;
     public static boolean enableCeilingBlockCollision = true; // whether to allow blocks above the minecart to collide
@@ -85,23 +85,25 @@ public class TCConfig {
     public static boolean initRedstoneWithRadius = true;
     public static boolean animationsUseTickTime = false;
     public static boolean claimNewSavedTrains = true;
-    public static boolean onlyPoweredEmptySwitchersDoPathfinding = false;
+    public static boolean onlyPoweredSwitchersDoPathFinding = true;
+    public static boolean onlyEmptySwitchersDoPathFinding = false;
     public static boolean enableSneakingInAttachmentEditor = false;
     public static boolean playHissWhenStopAtStation = true;
     public static boolean playHissWhenDestroyedBySign = true;
     public static boolean playHissWhenLinked = true;
     public static boolean playHissWhenCartRemoved = true;
+    public static boolean rerouteOnStartup = false;
+    public static boolean switcherResetCountersOnFirstCart = true;
     public static String launchFunctionType = "bezier";
     public static boolean parseOldSigns;
     public static boolean allowParenthesesFormat = true;
     public static boolean upsideDownSupportedByAll = false;
-    public static int tickUpdateDivider = 1; // allows slowing down of minecart physics globally (debugging!)
-    public static int tickUpdateNow = 0; // forces update ticks
-    public static boolean tickUpdateEnabled = true; // whether train tick updates are enabled
     public static int autoSaveInterval = 30 * 20; // autosave every 30 seconds
+    public static int attachmentTransformParallelism = -1;
     public static boolean allowExternalTicketImagePaths = false; // Whether images outside of the images subdirectory are allowed
     public static String currencyFormat;
     public static Set<Material> allowedBlockBreakTypes = new HashSet<>();
+    public static Set<String> enabledWorlds = new HashSet<>();
     public static Set<String> disabledWorlds = new HashSet<>();
     public static Map<String, ItemParser[]> parsers = new HashMap<>();
     public static MapResourcePack resourcePack = MapResourcePack.SERVER;
@@ -223,11 +225,6 @@ public class TCConfig {
         config.addHeader("enableCeilingBlockCollision", "If these collisions are unwanted, they can be turned off here");
         enableCeilingBlockCollision = config.get("enableCeilingBlockCollision", true);
 
-        config.setHeader("useNetworkSynchronizer", "\nAdvanced: Whether trains use a different way of server->client synchronization");
-        config.addHeader("useNetworkSynchronizer", "With this enabled, trains are expected to move smoother with less bumping");
-        config.addHeader("useNetworkSynchronizer", "With this disabled, no smoothing is applied. Only disable it if it causes problems/incompatibility");
-        useNetworkSynchronizer = config.get("useNetworkSynchronizer", true);
-
         config.setHeader("animationsUseTickTime", "\nSets whether attachment animations use tick time or wall clock time");
         config.addHeader("animationsUseTickTime", "When false, wall clock time is used, and server lag will not slow down/speed up animations");
         config.addHeader("animationsUseTickTime", "When true, tick time is used, and server lag will cause speed changes. Animations do stay in sync with physics");
@@ -346,7 +343,19 @@ public class TCConfig {
         config.addHeader("activatorEjectEnabled", "If activator rails are used for decoration purposes, this should be disabled");
         activatorEjectEnabled = config.get("activatorEjectEnabled", true);
 
+        config.setHeader("enabledWorlds", "\nA list of world names where TrainCarts should be enabled");
+        config.addHeader("enabledWorlds", "If this list is empty, all worlds are enabled except those listed in disabledWorlds");
+        config.addHeader("enabledWorlds", "World names are not case-sensitive");
+        enabledWorlds.clear();
+        if (!config.contains("enabledWorlds")) {
+            config.set("enabledWorlds", Collections.emptyList());
+        }
+        for (String world : config.getList("enabledWorlds", String.class)) {
+            enabledWorlds.add(world.toLowerCase());
+        }
+
         config.setHeader("disabledWorlds", "\nA list of world names where TrainCarts should be disabled");
+        config.addHeader("disabledWorlds", "Overridden by enabledWorlds");
         config.addHeader("disabledWorlds", "World names are not case-sensitive");
         disabledWorlds.clear();
         if (!config.contains("disabledWorlds")) {
@@ -413,12 +422,34 @@ public class TCConfig {
         config.addHeader("initRedstoneWithRadius", "False will make sure signs initialize sooner and respond to redstone faster");
         initRedstoneWithRadius = config.get("initRedstoneWithRadius", true);
 
-        config.setHeader("onlyPoweredEmptySwitchersDoPathfinding", "\nSets whether only powered switcher signs without statements on them");
-        config.addHeader("onlyPoweredEmptySwitchersDoPathfinding", "actively switch tracks to lead trains towards their destination");
-        config.addHeader("onlyPoweredEmptySwitchersDoPathfinding", "When true, only [+train] switcher signs do pathfinding logic");
-        config.addHeader("onlyPoweredEmptySwitchersDoPathfinding", "When false, the original behavior is used, where any switcher sign handles path finding");
-        config.addHeader("onlyPoweredEmptySwitchersDoPathfinding", "False will allow switching of trains overriding standard path finding");
-        onlyPoweredEmptySwitchersDoPathfinding = config.get("onlyPoweredEmptySwitchersDoPathfinding", false);
+        // Legacy configuration option migration
+        if (config.contains("onlyPoweredEmptySwitchersDoPathfinding")) {
+            if (config.get("onlyPoweredEmptySwitchersDoPathfinding", false)) {
+                config.set("onlyPoweredSwitchersDoPathFinding", true);
+                config.set("onlyEmptySwitchersDoPathFinding", true);
+            }
+            config.remove("onlyPoweredEmptySwitchersDoPathfinding");
+        }
+
+        config.setHeader("onlyPoweredSwitchersDoPathFinding", "\nSets whether switcher signs must be redstone-powered to switch track using pathfinding logic");
+        config.addHeader("onlyPoweredSwitchersDoPathFinding", "If true, then signs must be redstone-powered or use [+train] to do pathfinding");
+        config.addHeader("onlyPoweredSwitchersDoPathFinding", "If false, then signs will also switch track using pathfinding when not powered");
+        config.addHeader("onlyPoweredSwitchersDoPathFinding", "Default is true, which allows for [-train] switcher signs to properly detect trains");
+        onlyPoweredSwitchersDoPathFinding = config.get("onlyPoweredSwitchersDoPathFinding", true);
+
+        config.setHeader("onlyEmptySwitchersDoPathFinding", "\nSets whether switchers must have the last two lines on the sign empty, for it to switch");
+        config.addHeader("onlyEmptySwitchersDoPathFinding", "track using pathfinding logic");
+        config.addHeader("onlyEmptySwitchersDoPathFinding", "If true, then statements on switcher signs will disable the pathfinding functionality");
+        config.addHeader("onlyEmptySwitchersDoPathFinding", "If false, then statements on switcher signs complement the pathfinding functionality");
+        config.addHeader("onlyEmptySwitchersDoPathFinding", "Default is false, which allows pathfinding to be a fallback case");
+        onlyEmptySwitchersDoPathFinding = config.get("onlyEmptySwitchersDoPathFinding", false);
+
+        config.setHeader("rerouteOnStartup", "\nWhen enabled, re-calculates all path finding routes on plugin startup");
+        rerouteOnStartup = config.get("rerouteOnStartup", false);
+
+        config.setHeader("switcherResetCountersOnFirstCart", "\nFor [cart] signs that use counter statements, specifies whether");
+        config.addHeader("switcherResetCountersOnFirstCart", "counters reset on the first cart of the train");
+        switcherResetCountersOnFirstCart = config.get("switcherResetCountersOnFirstCart", true);
 
         parsers.clear();
 
@@ -486,7 +517,6 @@ public class TCConfig {
 
         for (Map.Entry<String, String> entry : itemshort.getValues(String.class).entrySet()) {
             putParsers(entry.getKey(), Util.getParsers(entry.getValue()));
-            itemshort.setRead(entry.getKey());
         }
 
         // Whether images can be loaded outside of the /images subdirectory
@@ -518,6 +548,20 @@ public class TCConfig {
         config.addHeader("upsideDownSupportedByAll", "If true, blocks like glass and barrier blocks can hold upside-down rails");
         config.addHeader("upsideDownSupportedByAll", "If false, only fully-solid blocks can hold them");
         upsideDownSupportedByAll = config.get("upsideDownSupportedByAll", true);
+
+        // How many threads are used to update attachment positions
+        config.setHeader("attachmentTransformParallelism", "\nHow many threads are used to update attachment positions");
+        config.addHeader("attachmentTransformParallelism", "Multi-core CPU servers can benefit from higher parallelism");
+        config.addHeader("attachmentTransformParallelism", "If only a single core is available, using 1 is recommended to avoid overhead");
+        config.addHeader("attachmentTransformParallelism", "The default, 'auto' or -1, will detect the number of CPU cores and use that");
+        if (!config.contains("attachmentTransformParallelism")) {
+            config.set("attachmentTransformParallelism", "auto");
+            attachmentTransformParallelism = -1;
+        } else if ("auto".equals(config.get("attachmentTransformParallelism"))) {
+            attachmentTransformParallelism = -1;
+        } else {
+            attachmentTransformParallelism = config.get("attachmentTransformParallelism", -1);
+        }
     }
 
     public static void putParsers(String key, ItemParser[] parsersArr) {

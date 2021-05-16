@@ -2,7 +2,6 @@ package com.bergerkiller.bukkit.tc.controller;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -15,8 +14,9 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
+import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
@@ -27,8 +27,8 @@ import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.vehicle.VehicleEntityCollisionEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.event.vehicle.VehicleUpdateEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.material.Rails;
 import org.bukkit.util.Vector;
 
@@ -39,6 +39,7 @@ import com.bergerkiller.bukkit.common.bases.IntVector3;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
 import com.bergerkiller.bukkit.common.controller.EntityController;
 import com.bergerkiller.bukkit.common.entity.type.CommonMinecart;
+import com.bergerkiller.bukkit.common.inventory.MergedInventory;
 import com.bergerkiller.bukkit.common.math.Matrix4x4;
 import com.bergerkiller.bukkit.common.math.OrientedBoundingBox;
 import com.bergerkiller.bukkit.common.math.Quaternion;
@@ -51,6 +52,7 @@ import com.bergerkiller.bukkit.common.utils.MathUtil;
 import com.bergerkiller.bukkit.common.utils.WorldUtil;
 import com.bergerkiller.bukkit.common.wrappers.BlockData;
 import com.bergerkiller.bukkit.common.wrappers.DamageSource;
+import com.bergerkiller.bukkit.common.wrappers.HumanHand;
 import com.bergerkiller.bukkit.common.wrappers.MoveType;
 import com.bergerkiller.bukkit.tc.CollisionMode;
 import com.bergerkiller.bukkit.tc.RealisticSoundLoop;
@@ -68,6 +70,7 @@ import com.bergerkiller.bukkit.tc.attachments.control.CartAttachmentSeat;
 import com.bergerkiller.bukkit.tc.cache.RailSignCache.TrackedSign;
 import com.bergerkiller.bukkit.tc.controller.components.ActionTrackerMember;
 import com.bergerkiller.bukkit.tc.controller.components.AnimationController;
+import com.bergerkiller.bukkit.tc.controller.components.AttachmentControllerMember;
 import com.bergerkiller.bukkit.tc.controller.components.RailPath;
 import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
 import com.bergerkiller.bukkit.tc.controller.components.RailState;
@@ -111,6 +114,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     private final ActionTrackerMember actionTracker = new ActionTrackerMember(this);
     private final RailTrackerMember railTrackerMember = new RailTrackerMember(this);
     private final WheelTrackerMember wheelTracker = new WheelTrackerMember(this);
+    private final AttachmentControllerMember attachmentController = new AttachmentControllerMember(this);
     private final ToggledState railActivated = new ToggledState(false);
     protected final ToggledState ticked = new ToggledState();
     public boolean vertToSlope = false;
@@ -511,6 +515,15 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     }
 
     /**
+     * Gets the controller for the attachments configured for this cart
+     *
+     * @return attachment controller
+     */
+    public AttachmentControllerMember getAttachments() {
+        return attachmentController;
+    }
+
+    /**
      * Sets whether this Minecart is unloaded. An unloaded minecart can not move and
      * can not be part of a group. Minecarts that are set unloaded will have all
      * standard behavior frozen until they are loaded again.
@@ -619,8 +632,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * @return passenger eject position
      */
     public Location getPassengerEjectLocation(Entity passenger) {
-        MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
-        CartAttachmentSeat seat = (network == null) ? null : network.findSeat(passenger);
+        CartAttachmentSeat seat = this.getAttachments().findSeat(passenger);
 
         if (seat == null || !seat.isAttached()) {
             // Fallback
@@ -641,8 +653,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * @return passenger position
      */
     public Location getPassengerLocation(Entity passenger) {
-        MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
-        CartAttachmentSeat seat = (network == null) ? null : network.findSeat(passenger);
+        CartAttachmentSeat seat = this.getAttachments().findSeat(passenger);
 
         if (seat == null) {
             // Fallback
@@ -1242,12 +1253,41 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         if (damagesource.toString().equals("fireworks")) {
             return false; // Ignore firework damage (used for cosmetics)
         }
+
         final Entity damager = damagesource.getEntity();
+
+        // Note: When a player is sprinting and damaging the Minecart, or uses
+        //       a weapon with knockback, the minecart is given a 'push'.
+        //       When collision with this entity/player is disabled, this is undesirable.
+        //       To disable this behavior, we return false from this method, causing
+        //       all the extra 'knockback' code to be skipped internally. There is no
+        //       Bukkit event we can handle to disable this otherwise.
+        boolean executePostLogic = true;
+        if (damager instanceof HumanEntity) {
+            ItemStack itemInMainHand = HumanHand.getItemInMainHand((HumanEntity) damager);
+            boolean willDoKnockback = false;
+            if (itemInMainHand != null &&
+                    itemInMainHand.hasItemMeta() &&
+                    itemInMainHand.getItemMeta().hasEnchant(Enchantment.KNOCKBACK)
+            ) {
+                willDoKnockback = true;
+            } else if (damager instanceof Player && ((Player) damager).isSprinting()) {
+                willDoKnockback = true;
+            }
+            if (willDoKnockback) {
+                if (this.isUnloaded()) {
+                    executePostLogic = false; // better safe than sorry
+                } else if (!this.getGroup().getProperties().getCollisionMode(damager).permitsKnockback()) {
+                    executePostLogic = false;
+                }
+            }
+        }
+
         try {
             // Call CraftBukkit event
             VehicleDamageEvent event = new VehicleDamageEvent(entity.getEntity(), damager, damage);
             if (CommonUtil.callEvent(event).isCancelled()) {
-                return true;
+                return executePostLogic;
             }
             damage = event.getDamage();
             // Play shaking animation and logic
@@ -1273,7 +1313,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
                 VehicleDestroyEvent destroyEvent = new VehicleDestroyEvent(entity.getEntity(), damager);
                 if (CommonUtil.callEvent(destroyEvent).isCancelled()) {
                     entity.setDamage(MAXIMUM_DAMAGE_SUSTAINED);
-                    return true;
+                    return executePostLogic;
                 }
 
                 // Spawn drops and die
@@ -1290,7 +1330,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         } catch (Throwable t) {
             TrainCarts.plugin.handle(t);
         }
-        return true;
+        return executePostLogic;
     }
 
     @Override
@@ -1559,18 +1599,15 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     }
 
     /**
-     * Gets the inventory of a potential Player passenger
+     * Gets the inventory view of all player passengers of this Minecart.
      *
-     * @return the passenger Player inventory, or null if there is no player
+     * @return the passengers Player inventory
      */
-    public PlayerInventory getPlayerInventory() {
-        List<Player> players = entity.getPlayerPassengers();
-        if (players.isEmpty()) {
-            return null;
-        } else {
-            // TODO: Perhaps allow more than one player? Its weird.
-            return players.get(0).getInventory();
-        }
+    public Inventory getPlayerInventory() {
+        Inventory[] source = this.getEntity().getPlayerPassengers().stream()
+                .map(Player::getInventory)
+                .toArray(Inventory[]::new);
+        return new MergedInventory(source);
     }
 
     /**
@@ -2217,7 +2254,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         }
         MinecartGroup g = this.getGroup();
         if (g != null && g.ticked.set()) {
-            g.doPhysics();
+            g.doPhysics(TrainCarts.plugin);
         }
     }
 
@@ -2307,15 +2344,15 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * @return number of available seats
      */
     public int getAvailableSeatCount(Entity passenger) {
+        // Sync passengers first, which is for now done by the network controller
+        @SuppressWarnings("deprecation")
         MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
-        if (network == null) {
-            // Assume a single passenger slot, no special rules
-            return (entity.getType() == EntityType.MINECART && !entity.hasPassenger()) ? 1 : 0;
+        if (network != null) {
+            network.syncPassengers();
         }
 
-        // Ask the network controller about available seats. Make sure to sync passengers first.
-        network.syncPassengers();
-        return network.getAvailableSeatCount(passenger);
+        // Ask attachments controller for the number of available seats
+        return this.getAttachments().getAvailableSeatCount(passenger);
     }
 
     /**
@@ -2415,12 +2452,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
     @Override
     public List<String> GetAnimationNames() {
-        MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
-        if (network != null) {
-            return network.getRootAttachment().getAnimationNamesRecursive();
-        } else {
-            return Collections.emptyList();
-        }
+        return this.getAttachments().getRootAttachment().getAnimationNamesRecursive();
     }
 
     /**
@@ -2476,12 +2508,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      */
     @Override
     public boolean playNamedAnimation(AnimationOptions options) {
-        MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
-        if (network != null) {
-            return network.getRootAttachment().playNamedAnimationRecursive(options);
-        } else {
-            return false;
-        }
+        return this.getAttachments().getRootAttachment().playNamedAnimationRecursive(options);
     }
 
     /**
@@ -2492,7 +2519,6 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * @return Attachment at this path, or null if not found
      */
     public Attachment findAttachment(int[] targetPath) {
-        MinecartMemberNetwork network = CommonUtil.tryCast(entity.getNetworkController(), MinecartMemberNetwork.class);
-        return (network == null) ? null : network.getRootAttachment().findChild(targetPath);
+        return this.getAttachments().getRootAttachment().findChild(targetPath);
     }
 }

@@ -18,15 +18,19 @@ import com.bergerkiller.bukkit.tc.chest.TrainChestCommands;
 import com.bergerkiller.bukkit.tc.commands.annotations.CommandRequiresMultiplePermissions;
 import com.bergerkiller.bukkit.tc.commands.annotations.CommandRequiresPermission;
 import com.bergerkiller.bukkit.tc.commands.annotations.CommandTargetTrain;
+import com.bergerkiller.bukkit.tc.commands.argument.DirectionOrFormattedSpeed;
 import com.bergerkiller.bukkit.tc.commands.cloud.CloudHandler;
 import com.bergerkiller.bukkit.tc.commands.parsers.AccelerationParser;
+import com.bergerkiller.bukkit.tc.commands.parsers.DirectionOrFormattedSpeedParser;
 import com.bergerkiller.bukkit.tc.commands.parsers.DirectionParser;
 import com.bergerkiller.bukkit.tc.commands.parsers.LocalizedParserException;
+import com.bergerkiller.bukkit.tc.commands.parsers.TrainNameFormatParser;
 import com.bergerkiller.bukkit.tc.commands.parsers.FormattedSpeedParser;
 import com.bergerkiller.bukkit.tc.commands.parsers.TrainTargetingFlags;
 import com.bergerkiller.bukkit.tc.commands.suggestions.AnimationName;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
-import com.bergerkiller.bukkit.tc.exception.IllegalNameException;
+import com.bergerkiller.bukkit.tc.controller.MinecartMember;
+import com.bergerkiller.bukkit.tc.debug.DebugCommands;
 import com.bergerkiller.bukkit.tc.exception.command.InvalidClaimPlayerNameException;
 import com.bergerkiller.bukkit.tc.exception.command.NoPermissionForAnyPropertiesException;
 import com.bergerkiller.bukkit.tc.exception.command.NoPermissionForPropertyException;
@@ -36,11 +40,13 @@ import com.bergerkiller.bukkit.tc.exception.command.NoTrainSelectedException;
 import com.bergerkiller.bukkit.tc.exception.command.NoTrainStorageChestItemException;
 import com.bergerkiller.bukkit.tc.exception.command.SelectedTrainNotLoadedException;
 import com.bergerkiller.bukkit.tc.exception.command.SelectedTrainNotOwnedException;
+import com.bergerkiller.bukkit.tc.locator.TrainLocatorCommands;
 import com.bergerkiller.bukkit.tc.pathfinding.PathWorld;
 import com.bergerkiller.bukkit.tc.properties.CartProperties;
 import com.bergerkiller.bukkit.tc.properties.IProperties;
 import com.bergerkiller.bukkit.tc.properties.TrainProperties;
 import com.bergerkiller.bukkit.tc.properties.standard.StandardProperties;
+import com.bergerkiller.bukkit.tc.properties.standard.type.TrainNameFormat;
 import com.bergerkiller.bukkit.tc.utils.FormattedSpeed;
 import com.bergerkiller.mountiplex.MountiplexUtil;
 
@@ -71,7 +77,9 @@ public class Commands {
     private final CartCommands commands_cart = new CartCommands();
     private final TrainCommands commands_train = new TrainCommands();
     private final GlobalCommands commands_train_global = new GlobalCommands();
+    private final DebugCommands commands_train_debug = new DebugCommands();
     private final TrainChestCommands commands_train_chest = new TrainChestCommands();
+    private final TrainLocatorCommands commands_train_locator = new TrainLocatorCommands();
     private final TicketCommands commands_train_ticket = new TicketCommands();
     private final SavedTrainCommands commands_savedtrain = new SavedTrainCommands();
 
@@ -138,6 +146,16 @@ public class Commands {
             return trainProperties;
         });
 
+        // Getting the loaded MinecartMember from potentially not loaded CartProperties
+        cloud.injector(MinecartMember.class, (context, annotations) -> {
+            CartProperties properties = context.inject(CartProperties.class).get();
+            MinecartMember<?> member = properties.getHolder();
+            if (member == null || member.isUnloaded()) {
+                throw new SelectedTrainNotLoadedException();
+            }
+            return member;
+        });
+
         // Getting the loaded MinecartGroup from potentially not loaded TrainProperties
         cloud.injector(MinecartGroup.class, (context, annotations) -> {
             TrainProperties properties = context.inject(TrainProperties.class).get();
@@ -159,6 +177,8 @@ public class Commands {
         });
 
         cloud.parse(Direction.class, p -> new DirectionParser());
+        cloud.parse(TrainNameFormat.class, p -> new TrainNameFormatParser());
+        cloud.parse(DirectionOrFormattedSpeed.class, p -> new DirectionOrFormattedSpeedParser());
 
         cloud.handleMessage(NoPermissionException.class, Localization.COMMAND_NOPERM.getName());
         cloud.handleMessage(NoTrainSelectedException.class, Localization.EDIT_NOSELECT.getName());
@@ -213,7 +233,9 @@ public class Commands {
         cloud.annotations(commands_cart);
         cloud.annotations(commands_train);
         cloud.annotations(commands_train_global);
+        cloud.annotations(commands_train_debug);
         cloud.annotations(commands_train_chest);
+        cloud.annotations(commands_train_locator);
         cloud.annotations(commands_train_ticket);
         cloud.annotations(commands_savedtrain);
 

@@ -21,7 +21,6 @@ import com.bergerkiller.bukkit.tc.cache.RailSignCache;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroupStore;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
-import com.bergerkiller.bukkit.tc.controller.MinecartMemberNetwork;
 import com.bergerkiller.bukkit.tc.controller.MinecartMemberStore;
 import com.bergerkiller.bukkit.tc.debug.DebugTool;
 import com.bergerkiller.bukkit.tc.editor.TCMapControl;
@@ -378,7 +377,8 @@ public class TCListener implements Listener {
         }
 
         final Entity e = event.getExited();
-        final Location old_location = e.getLocation();
+        final Location old_entity_location = e.getLocation();
+        final Location old_seat_location = mm.getPassengerLocation(e);
         final Location loc = mm.getPassengerEjectLocation(e);
 
         // Teleport to the exit position a tick later
@@ -391,17 +391,12 @@ public class TCListener implements Listener {
                 // Do not teleport if the player changed position dramatically after exiting
                 // This is the case when teleporting (/tp)
                 // The default vanilla exit position is going to be at most 1 block away in all axis
+                // Check both seat and entity location. Players can sync their perceived seat
+                // location which the server accepts as an actual position.
                 Location new_location = e.getLocation();
-                if (old_location.getWorld() != new_location.getWorld()) {
-                    return;
-                }
-                if (Math.abs(old_location.getBlockX() - new_location.getBlockX()) > 1) {
-                    return;
-                }
-                if (Math.abs(old_location.getBlockY() - new_location.getBlockY()) > 1) {
-                    return;
-                }
-                if (Math.abs(old_location.getBlockZ() - new_location.getBlockZ()) > 1) {
+                if (!isPossibleExit(new_location, old_entity_location)
+                        && !isPossibleExit(new_location, old_seat_location))
+                {
                     return;
                 }
 
@@ -411,6 +406,22 @@ public class TCListener implements Listener {
         });
         mm.resetCollisionEnter();
         mm.onPropertiesChanged();
+    }
+
+    /**
+     * Minecraft client 'predicts' a stable exit for the player around
+     * the seat being exited. This method checks whether the current player
+     * position is within range that this could be.
+     *
+     * @param a Position A
+     * @param b Position B
+     * @return True if a is a possible exit of b (or vice-versa)
+     */
+    private static boolean isPossibleExit(Location a, Location b) {
+        return a.getWorld() == b.getWorld()
+                && Math.abs(a.getBlockX() - b.getBlockX()) <= 2
+                && Math.abs(a.getBlockY() - b.getBlockY()) <= 5
+                && Math.abs(a.getBlockZ() - b.getBlockZ()) <= 2;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -791,10 +802,7 @@ public class TCListener implements Listener {
             // If the Player indeed does enter the Minecart, then we know what seat to pick
             MinecartMember<?> newMinecart = MinecartMemberStore.getFromEntity(event.getRightClicked());
             if (!event.isCancelled() && newMinecart != null) {
-                MinecartMemberNetwork network = CommonUtil.tryCast(newMinecart.getEntity().getNetworkController(), MinecartMemberNetwork.class);
-                if (network != null) {
-                    network.storeSeatHint(event.getPlayer());
-                }
+                newMinecart.getAttachments().storeSeatHint(event.getPlayer());
             }
         }
     }
@@ -899,18 +907,39 @@ public class TCListener implements Listener {
         SignAction.handleBuild(event);
         if (event.isCancelled()) {
             // Properly give the sign back to the player that placed it
+            // We do not want to place down an empty sign, that is annoying
             // If this is impossible for whatever reason, just drop it
-            if (!Util.canInstantlyBuild(event.getPlayer())) {
+            Material signBlockType = event.getBlock().getType();
+            if (!Util.canInstantlyBuild(event.getPlayer()) && MaterialUtil.ISSIGN.get(signBlockType)) {
+                // Find the type of item matching the sign type
+                Material signItemType;
+                if (signBlockType == MaterialUtil.getMaterial("LEGACY_SIGN_POST")
+                        || signBlockType == MaterialUtil.getMaterial("LEGACY_WALL_SIGN")
+                ) {
+                    // Legacy (pre-1.13 support)
+                    signItemType = MaterialUtil.getFirst("OAK_SIGN", "LEGACY_SIGN");
+                } else if (signBlockType.name().contains("_WALL_")) {
+                    // BIRCH_WALL_SIGN -> BIRCH_SIGN
+                    signItemType = MaterialUtil.getMaterial(signBlockType.name().replace("_WALL_", "_"));
+                    if (signItemType == null) {
+                        // Fallback to at least return 'a' sign
+                        signItemType = MaterialUtil.getFirst("OAK_SIGN", "LEGACY_SIGN");
+                    }
+                } else {
+                    // Same as the sign block type
+                    signItemType = signBlockType;
+                }
+
                 ItemStack item = HumanHand.getItemInMainHand(event.getPlayer());
                 if (LogicUtil.nullOrEmpty(item)) {
-                    HumanHand.setItemInMainHand(event.getPlayer(), new ItemStack(Material.SIGN, 1));
-                } else if (MaterialUtil.isType(item, Material.SIGN) && item.getAmount() < ItemUtil.getMaxSize(item)) {
+                    HumanHand.setItemInMainHand(event.getPlayer(), new ItemStack(signItemType, 1));
+                } else if (MaterialUtil.isType(item, signItemType) && item.getAmount() < ItemUtil.getMaxSize(item)) {
                     ItemUtil.addAmount(item, 1);
                     HumanHand.setItemInMainHand(event.getPlayer(), item);
                 } else {
                     // Drop the item
                     Location loc = event.getBlock().getLocation().add(0.5, 0.5, 0.5);
-                    loc.getWorld().dropItemNaturally(loc, new ItemStack(Material.SIGN, 1));
+                    loc.getWorld().dropItemNaturally(loc, new ItemStack(signItemType, 1));
                 }
             }
 
