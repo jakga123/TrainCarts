@@ -4,7 +4,7 @@
 
     <groupId>com.bergerkiller.bukkit</groupId>
     <artifactId>TrainCarts</artifactId>
-    <version>1.16.5-v2-SNAPSHOT</version>
+    <version>1.16.5-v1-SketchTown</version>
     <packaging>jar</packaging>
 
     <name>TrainCarts</name>
@@ -87,7 +87,7 @@
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot</artifactId>
             <version>${project.cbversion}</version>
-            <scope>test</scope>
+            <scope>provided</scope>
         </dependency>
 
         <!-- LightAPI (optional) for light attachment -->

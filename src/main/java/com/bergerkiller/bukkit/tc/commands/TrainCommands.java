@@ -520,7 +520,7 @@ public class TrainCommands {
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train drive <mode>")
-    @CommandDescription("¼öµ¿¿îÀüÃ¼°è")
+    @CommandDescription("ìˆ˜ë™ìš´ì „ì²´ê³„")
 	private void commandSketchTownDrive(
             final CommandSender sender,
             final TrainProperties properties,
@@ -542,10 +542,10 @@ public class TrainCommands {
     		}
 			properties.getHolder().lctManual.reset();
 			properties.getHolder().lctManual = new LCTManual(properties.getHolder(), "");
-    		sender.sendMessage(ChatColor.GREEN + "ÀÚµ¿¿îÀüÀ¸·Î ÀüÈ¯µÇ¾ú½À´Ï´Ù.");
+    		sender.sendMessage(ChatColor.GREEN + "ìë™ìš´ì „ìœ¼ë¡œ ì „í™˜ë˜ì—ˆìŠµë‹ˆë‹¤.");
     		return;
     	}
-    	sender.sendMessage(ChatColor.GREEN + "±â°ü»ç´Ô È¯¿µÇÕ´Ï´Ù. ¾ÈÀü¿îÀü µÇ½Ê½Ã¿À.");
+    	sender.sendMessage(ChatColor.GREEN + "ê¸°ê´€ì‚¬ë‹˜ í™˜ì˜í•©ë‹ˆë‹¤. ì•ˆì „ìš´ì „ ë˜ì‹­ì‹œì˜¤.");
     	group.getActions().clear();
     	properties.setSlowingDown(false);
         properties.setWaitDistance(0);
@@ -557,7 +557,7 @@ public class TrainCommands {
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train unlink")
-    @CommandDescription("¼öµ¿¿îÀüÃ¼°è")
+    @CommandDescription("ìˆ˜ë™ìš´ì „ì²´ê³„")
 	private void commandSketchTownUnlink(
             final CommandSender sender,
             final TrainProperties properties
@@ -577,7 +577,7 @@ public class TrainCommands {
 	    	} else if (player.getVehicle() == group.tail().getEntity().getEntity()) {
 	    		head = group.tail();
 	    	} else {
-	    		sender.sendMessage(ChatColor.RED + "¿­Â÷¸¦ ºĞ¸®ÇÒ ¼ö ¾ø½À´Ï´Ù!");
+	    		sender.sendMessage(ChatColor.RED + "ì—´ì°¨ë¥¼ ë¶„ë¦¬í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤!");
 	    		return;
 	    	}
 			group.getActions().clear();
@@ -590,39 +590,39 @@ public class TrainCommands {
 			head.getGroup().getProperties().setWaitDistance(0);
 			head.getGroup().lctManual = new LCTManual(head.getGroup(), group.lctManual.pilot);
 		}
-		sender.sendMessage(ChatColor.RED + "¿­Â÷¸¦ ºĞ¸®ÇÒ ¼ö ¾ø½À´Ï´Ù!");
+		sender.sendMessage(ChatColor.RED + "ì—´ì°¨ë¥¼ ë¶„ë¦¬í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤!");
 	}
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ADMIN)
     @CommandMethod("train admindrive|driveadmin")
-    @CommandDescription("¼öµ¿¿îÀüÃ¼°è")
+    @CommandDescription("ìˆ˜ë™ìš´ì „ì²´ê³„")
 	private void commandSketchTownAdminDrive(
             final CommandSender sender,
             final TrainProperties properties
 	) {
 		if (properties.getHolder().lctManual.isAdmin()) {
 			properties.getHolder().lctManual.setAdmin(false);
-			sender.sendMessage(ChatColor.GOLD + "°ü¸®ÀÚ ±ÇÇÑÀÌ ºñÈ°¼ºÈ­µÇ¾ú½À´Ï´Ù.");
+			sender.sendMessage(ChatColor.GOLD + "ê´€ë¦¬ì ê¶Œí•œì´ ë¹„í™œì„±í™”ë˜ì—ˆìŠµë‹ˆë‹¤.");
 		} else {
 			properties.getHolder().lctManual.setAdmin(true);
-			sender.sendMessage(ChatColor.GREEN + "°ü¸®ÀÚ ±ÇÇÑÀÌ È°¼ºÈ­µÇ¾ú½À´Ï´Ù. º¸¾ÈÀÌ Ã¶ÀúÇÒ °æ¿ì¿¡¸¸ »ç¿ëÇØ ÁÖ½Ê½Ã¿À.");
+			sender.sendMessage(ChatColor.GREEN + "ê´€ë¦¬ì ê¶Œí•œì´ í™œì„±í™”ë˜ì—ˆìŠµë‹ˆë‹¤. ë³´ì•ˆì´ ì² ì €í•  ê²½ìš°ì—ë§Œ ì‚¬ìš©í•´ ì£¼ì‹­ì‹œì˜¤.");
 		}
 	}
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train semiauto|semiautodrive")
-    @CommandDescription("¼öµ¿¿îÀüÃ¼°è")
+    @CommandDescription("ìˆ˜ë™ìš´ì „ì²´ê³„")
 	private void commandSketchTownSemiAutoDrive(
             final CommandSender sender,
             final TrainProperties properties
 	) {
 		if (properties.getHolder().lctManual.isSemiAuto()) {
 			properties.getHolder().lctManual.setSemiAuto(false);
-			sender.sendMessage(ChatColor.GOLD + "¹İÀÚµ¿ ¿îÀüÀÌ ºñÈ°¼ºÈ­µÇ¾ú½À´Ï´Ù.");
+			sender.sendMessage(ChatColor.GOLD + "ë°˜ìë™ ìš´ì „ì´ ë¹„í™œì„±í™”ë˜ì—ˆìŠµë‹ˆë‹¤.");
 		} else {
 			properties.getHolder().lctManual.setSemiAuto(true);
-			sender.sendMessage(ChatColor.GREEN + "¹İÀÚµ¿ ¿îÀüÀÌ È°¼ºÈ­µÇ¾ú½À´Ï´Ù. »ó´ÜÀÇ [¹İÀÚµ¿]Ç¥½Ã°¡ ÆÄ¶õ»öÀÌ µÇ¸é ¹ßÂ÷¸¦ °áÁ¤ÇÒ ¼ö ÀÖ½À´Ï´Ù.");
-			sender.sendMessage(ChatColor.GREEN + "¹ßÂ÷°¡ °¡´ÉÇÒ¶§ [W]¸¦ ´­·¯ ¹ßÂ÷ ÇÏ½Ê½Ã¿À.");
+			sender.sendMessage(ChatColor.GREEN + "ë°˜ìë™ ìš´ì „ì´ í™œì„±í™”ë˜ì—ˆìŠµë‹ˆë‹¤. ìƒë‹¨ì˜ [ë°˜ìë™]í‘œì‹œê°€ íŒŒë€ìƒ‰ì´ ë˜ë©´ ë°œì°¨ë¥¼ ê²°ì •í•  ìˆ˜ ìˆìŠµë‹ˆë‹¤.");
+			sender.sendMessage(ChatColor.GREEN + "ë°œì°¨ê°€ ê°€ëŠ¥í• ë•Œ [W]ë¥¼ ëˆŒëŸ¬ ë°œì°¨ í•˜ì‹­ì‹œì˜¤.");
 		}
 	}
 

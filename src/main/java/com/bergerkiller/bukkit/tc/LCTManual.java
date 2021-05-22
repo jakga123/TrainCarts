@@ -70,8 +70,8 @@ public class LCTManual {
 	    aDist = 0;
 	    aVelo = 0;
 	    bossbar = Bukkit.createBossBar("", BarColor.BLUE, BarStyle.SEGMENTED_12);
-	    signalbar = Bukkit.createBossBar("Â÷»ó ½ÅÈ£±â", BarColor.YELLOW, BarStyle.SOLID);
-	   	stationbar = Bukkit.createBossBar("Á¤Â÷ À§Ä¡", BarColor.BLUE, BarStyle.SEGMENTED_12);
+	    signalbar = Bukkit.createBossBar("ì°¨ìƒ ì‹ í˜¸ê¸°", BarColor.YELLOW, BarStyle.SOLID);
+	   	stationbar = Bukkit.createBossBar("ì •ì°¨ ìœ„ì¹˜", BarColor.BLUE, BarStyle.SEGMENTED_12);
 	}
 	/*put this on SignAction(Blocker, Launcher, Station, Wait)
     	if (info.getGroup().isManualMovement()) return;
@@ -140,9 +140,9 @@ public class LCTManual {
 				    				notch++;
 				    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
 				    				if (notch > 0) {
-				    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[¿ªÇà" + notch + "]", 0, 70, 20);
+				    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[ì—­í–‰" + notch + "]", 0, 70, 20);
 				    				} else if (notch < 0) {
-				    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[Á¦µ¿" + Math.abs(notch) + "]", 0, 70, 20);
+				    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[ì œë™" + Math.abs(notch) + "]", 0, 70, 20);
 				    				} else {
 					    				notch = 0;
 				    					pilotPlayer.sendTitle("", ChatColor.GRAY + "[N]", 0, 70, 20);
@@ -161,9 +161,9 @@ public class LCTManual {
 			    		    		for (Entity entity2 : member2.getEntity().getEntity().getPassengers()) {
 			    		    			if (entity2 == pilotPlayer) {
 			    		    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-					    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[¿ŞÂÊ ÃâÀÔ¹® Æó¼â]", 0, 70, 20);
+					    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[ì™¼ìª½ ì¶œì…ë¬¸ íì‡„]", 0, 70, 20);
 			    		    			} else {
-			    		    				entity2.sendMessage(ChatColor.GREEN + "ÃâÀÔ¹®ÀÌ ´İÈü´Ï´Ù.");
+			    		    				entity2.sendMessage(ChatColor.GREEN + "ì¶œì…ë¬¸ì´ ë‹«í™ë‹ˆë‹¤.");
 			    		    			}
 			    		    		}
 			    		    		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
@@ -183,9 +183,9 @@ public class LCTManual {
 			    		    		for (Entity entity2 : member2.getEntity().getEntity().getPassengers()) {
 			    		    			if (entity2 == pilotPlayer) {
 			    		    				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-					    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[¿À¸¥ÂÊ ÃâÀÔ¹® Æó¼â]", 0, 70, 20);
+					    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[ì˜¤ë¥¸ìª½ ì¶œì…ë¬¸ íì‡„]", 0, 70, 20);
 			    		    			} else {
-			    		    				entity2.sendMessage(ChatColor.GREEN + "ÃâÀÔ¹®ÀÌ ´İÈü´Ï´Ù.");
+			    		    				entity2.sendMessage(ChatColor.GREEN + "ì¶œì…ë¬¸ì´ ë‹«í™ë‹ˆë‹¤.");
 			    		    			}
 			    		    		}
 			    		    		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
@@ -207,9 +207,9 @@ public class LCTManual {
 			    					notch--;
 			    					pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
 			    					if (notch > 0) {
-				    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[¿ªÇà" + notch + "]", 0, 70, 20);
+				    					pilotPlayer.sendTitle("", ChatColor.DARK_AQUA + "[ì—­í–‰" + notch + "]", 0, 70, 20);
 				    				} else if (notch < 0) {
-				    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[Á¦µ¿" + Math.abs(notch) + "]", 0, 70, 20);
+				    					pilotPlayer.sendTitle("", ChatColor.GOLD + "[ì œë™" + Math.abs(notch) + "]", 0, 70, 20);
 				    				} else {
 				    					pilotPlayer.sendTitle("", ChatColor.GRAY + "[N]", 0, 70, 20);
 			    					}
@@ -224,7 +224,7 @@ public class LCTManual {
 				break;
 			}
 		}
-		//°è»êÀÛ¾÷
+		//ê³„ì‚°ì‘ì—…
 		if (!isSemiAuto()) {
 			if (targetSpeed < group.getAverageForce() && !admin) {
 				double brake = group.getAverageForce() - 0.005d;
@@ -245,7 +245,7 @@ public class LCTManual {
 					group.updateDirection();
 					if (pilotPlayer != null) {
 						pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-						pilotPlayer.sendTitle("", "[¹æÇâÀüÈ¯]", 0, 70, 20);
+						pilotPlayer.sendTitle("", "[ë°©í–¥ì „í™˜]", 0, 70, 20);
 					}
 					stopped = false;
 				} else if ((double) (group.getProperties().getSpeedLimit() * (double) ((double)notch / 4.0d)) > group.getAverageForce()) {
@@ -273,26 +273,26 @@ public class LCTManual {
 		String doorString = "";
 		String notchString = "";
 		if (ldoor) {
-			doorString += ChatColor.GREEN + "[°³¹æ";
+			doorString += ChatColor.GREEN + "[ê°œë°©";
 		} else {
-			doorString += ChatColor.GOLD + "[Æó¼â";
+			doorString += ChatColor.GOLD + "[íì‡„";
 		}
 		doorString += ChatColor.RESET + "/";
 		if (rdoor) {
-			doorString += ChatColor.GREEN + "°³¹æ]";
+			doorString += ChatColor.GREEN + "ê°œë°©]";
 		} else {
-			doorString += ChatColor.GOLD + "Æó¼â]";
+			doorString += ChatColor.GOLD + "íì‡„]";
 		}
 		if (isSemiAuto()) {
 			if (group.getAverageForce() <= 0 && aDir != null) {
-				notchString = ChatColor.AQUA + "[¹İÀÚµ¿]";
+				notchString = ChatColor.AQUA + "[ë°˜ìë™]";
 			} else {
-				notchString = ChatColor.GRAY + "[¹İÀÚµ¿]";
+				notchString = ChatColor.GRAY + "[ë°˜ìë™]";
 			}
 		} else if (notch > 0) {
-			notchString = ChatColor.DARK_AQUA + "[¿ªÇà" + notch + "]";
+			notchString = ChatColor.DARK_AQUA + "[ì—­í–‰" + notch + "]";
 		} else if (notch < 0) {
-			notchString = ChatColor.GOLD + "[Á¦µ¿" + Math.abs(notch) + "]";
+			notchString = ChatColor.GOLD + "[ì œë™" + Math.abs(notch) + "]";
 		} else {
 			notchString = ChatColor.GRAY + "[N]";
 		}
@@ -307,7 +307,7 @@ public class LCTManual {
 			if (distance < 0) {
 				distance = 0;
 			}
-			stationbar.setTitle("Á¤Â÷ À§Ä¡ || " + String.format("%.2f", distance) + " ºí·°");
+			stationbar.setTitle("ì •ì°¨ ìœ„ì¹˜ || " + String.format("%.2f", distance) + " ë¸”ëŸ­");
 			double distanceB = (distance / 10d);
 			if (distanceB >= 0 && distanceB <= 1) {
 				stationbar.setProgress(distanceB);
@@ -315,21 +315,21 @@ public class LCTManual {
 		} else if (!targetStation) {
 			stationbar.removeAll();
 		}
-		bossbar.setTitle("ÃâÀÔ¹® : " + doorString + ChatColor.RESET + " || " + notchString + ChatColor.RESET + " || ¼Ó·Â : " + ChatColor.BOLD + Math.round(Math.min(group.getProperties().getSpeedLimit(), group.getAverageForce()) * 100) + ChatColor.RESET +  "/" + Math.round(group.getProperties().getSpeedLimit() * 100) + "km/h");
+		bossbar.setTitle("ì¶œì…ë¬¸ : " + doorString + ChatColor.RESET + " || " + notchString + ChatColor.RESET + " || ì†ë ¥ : " + ChatColor.BOLD + Math.round(Math.min(group.getProperties().getSpeedLimit(), group.getAverageForce()) * 100) + ChatColor.RESET +  "/" + Math.round(group.getProperties().getSpeedLimit() * 100) + "km/h");
 		if (targetDistance > 0) {
-			signalbar.setTitle("Â÷»ó ½ÅÈ£±â || Á¦ÇÑ ¼Óµµ : 0km/h");
+			signalbar.setTitle("ì°¨ìƒ ì‹ í˜¸ê¸° || ì œí•œ ì†ë„ : 0km/h");
 			signalbar.setColor(BarColor.RED);
 			if (group.getSpeedAhead(targetDistance) == Double.MAX_VALUE) {
 				targetDistance = 0;
 			}
 		} else if (targetSpeed >= group.getProperties().getSpeedLimit()) {
-			signalbar.setTitle("Â÷»ó ½ÅÈ£±â || Á¦ÇÑ ¼Óµµ : ¾øÀ½");
+			signalbar.setTitle("ì°¨ìƒ ì‹ í˜¸ê¸° || ì œí•œ ì†ë„ : ì—†ìŒ");
 			signalbar.setColor(BarColor.GREEN);
 		} else if (targetSpeed == 0) {
-			signalbar.setTitle("Â÷»ó ½ÅÈ£±â || Á¦ÇÑ ¼Óµµ : 0km/h");
+			signalbar.setTitle("ì°¨ìƒ ì‹ í˜¸ê¸° || ì œí•œ ì†ë„ : 0km/h");
 			signalbar.setColor(BarColor.RED);
 		} else {
-			signalbar.setTitle("Â÷»ó ½ÅÈ£±â || Á¦ÇÑ ¼Óµµ : " + Math.round(targetSpeed * 100) + "km/h");
+			signalbar.setTitle("ì°¨ìƒ ì‹ í˜¸ê¸° || ì œí•œ ì†ë„ : " + Math.round(targetSpeed * 100) + "km/h");
 			signalbar.setColor(BarColor.YELLOW);
 		}
 		bossbar.setProgress(Math.max(0, Math.min(1.0d, group.getAverageForce() / group.getProperties().getSpeedLimit())));
@@ -449,9 +449,9 @@ public class LCTManual {
     		for (Entity entity2 : member2.getEntity().getEntity().getPassengers()) {
     			if (entity2 == pilotPlayer) {
     				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-					pilotPlayer.sendTitle("", ChatColor.GREEN + "[¿ŞÂÊ ÃâÀÔ¹® °³¹æ]", 0, 70, 20);
+					pilotPlayer.sendTitle("", ChatColor.GREEN + "[ì™¼ìª½ ì¶œì…ë¬¸ ê°œë°©]", 0, 70, 20);
     			} else {
-    				entity2.sendMessage(ChatColor.GREEN + "ÃâÀÔ¹®ÀÌ ¿­¸³´Ï´Ù.");
+    				entity2.sendMessage(ChatColor.GREEN + "ì¶œì…ë¬¸ì´ ì—´ë¦½ë‹ˆë‹¤.");
     			}
     		}
     		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
@@ -468,9 +468,9 @@ public class LCTManual {
     		for (Entity entity2 : member2.getEntity().getEntity().getPassengers()) {
     			if (entity2 == pilotPlayer) {
     				pilotPlayer.playSound(pilotPlayer.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 10000.0f, 1.0f);
-					pilotPlayer.sendTitle("", ChatColor.GREEN + "[¿À¸¥ÂÊ ÃâÀÔ¹® °³¹æ]", 0, 70, 20);
+					pilotPlayer.sendTitle("", ChatColor.GREEN + "[ì˜¤ë¥¸ìª½ ì¶œì…ë¬¸ ê°œë°©]", 0, 70, 20);
     			} else {
-    				entity2.sendMessage(ChatColor.GREEN + "ÃâÀÔ¹®ÀÌ ¿­¸³´Ï´Ù.");
+    				entity2.sendMessage(ChatColor.GREEN + "ì¶œì…ë¬¸ì´ ì—´ë¦½ë‹ˆë‹¤.");
     			}
     		}
     		group.getWorld().playSound(member2.getEntity().getLocation(), Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 2.0f);
