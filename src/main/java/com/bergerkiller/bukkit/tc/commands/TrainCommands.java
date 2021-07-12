@@ -515,18 +515,7 @@ public class TrainCommands {
             }
         }
     }
-
-	@CommandTargetTrain
-	@CommandRequiresPermission(Permission.DRIVE_ME)
-    @CommandMethod("train drive <mode>")
-    @CommandDescription("수동운전체계")
-	private void commandSketchTownDriveOn(
-            final CommandSender sender,
-            final TrainProperties properties,
-            final @Argument("mode") String driveMode
-	) {
-		commandSketchTownDrive(sender, properties, "on");
-	}
+	
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train drive <mode>")
@@ -564,6 +553,7 @@ public class TrainCommands {
         group.lctManual = new LCTManual(group, sender.getName());
         group.lctManual.stopped = true;
 	}
+	
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train unlink")
@@ -602,6 +592,7 @@ public class TrainCommands {
 		}
 		sender.sendMessage(ChatColor.RED + "열차를 분리할 수 없습니다!");
 	}
+	
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ADMIN)
     @CommandMethod("train admindrive|driveadmin")
@@ -618,6 +609,7 @@ public class TrainCommands {
 			sender.sendMessage(ChatColor.GREEN + "관리자 권한이 활성화되었습니다. 보안이 철저할 경우에만 사용해 주십시오.");
 		}
 	}
+	
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train semiauto|semiautodrive")
