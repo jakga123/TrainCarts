@@ -2241,13 +2241,12 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
         // Final logic
         this.checkMissing();
-
-        // Play additional sound effects
-        sound.onTick();
     }
 
     @Override
     public void onTick() {
+        // Play additional sound effects
+        sound.onTick();
         this.ticked.set();
         if (this.isUnloaded()) {
             return;

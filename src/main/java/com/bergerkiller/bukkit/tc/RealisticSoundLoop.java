@@ -1,10 +1,7 @@
 package com.bergerkiller.bukkit.tc;
 
 import java.util.HashMap;
-import java.util.Random;
 
-import org.bukkit.Sound;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;

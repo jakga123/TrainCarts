@@ -515,8 +515,18 @@ public class TrainCommands {
             }
         }
     }
-	
-	
+
+	@CommandTargetTrain
+	@CommandRequiresPermission(Permission.DRIVE_ME)
+    @CommandMethod("train drive <mode>")
+    @CommandDescription("수동운전체계")
+	private void commandSketchTownDriveOn(
+            final CommandSender sender,
+            final TrainProperties properties,
+            final @Argument("mode") String driveMode
+	) {
+		commandSketchTownDrive(sender, properties, "on");
+	}
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train drive <mode>")
@@ -557,7 +567,7 @@ public class TrainCommands {
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train unlink")
-    @CommandDescription("수동운전체계")
+    @CommandDescription("수동운전체계-기관차 분리")
 	private void commandSketchTownUnlink(
             final CommandSender sender,
             final TrainProperties properties
@@ -595,7 +605,7 @@ public class TrainCommands {
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ADMIN)
     @CommandMethod("train admindrive|driveadmin")
-    @CommandDescription("수동운전체계")
+    @CommandDescription("수동운전체계-관리자 권한")
 	private void commandSketchTownAdminDrive(
             final CommandSender sender,
             final TrainProperties properties
@@ -611,7 +621,7 @@ public class TrainCommands {
 	@CommandTargetTrain
 	@CommandRequiresPermission(Permission.DRIVE_ME)
     @CommandMethod("train semiauto|semiautodrive")
-    @CommandDescription("수동운전체계")
+    @CommandDescription("수동운전체계-반자동 운전")
 	private void commandSketchTownSemiAutoDrive(
             final CommandSender sender,
             final TrainProperties properties
